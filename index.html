@@ -13,6 +13,7 @@
      ============================================================ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
   :root{
@@ -196,6 +197,45 @@
   .rec-meta{ font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px; }
   #viewList main-pad{ padding-bottom: 40px; }
   #viewList{ padding-bottom:30px; }
+  .rec-edit-btn{
+    background:#EEF3F5; color:var(--teal); border:none; border-radius:8px;
+    padding:5px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0;
+  }
+
+  /* ===== Generic card/field styles (used by Analysis view) ===== */
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .field{ margin-bottom:14px; }
+  .field:last-child{ margin-bottom:0; }
+  .card label{ display:block; font-size:13px; font-weight:700; margin-bottom:6px; color:var(--navy); }
+  .card select, .card input[type="date"], .card input[type="number"], .card textarea{
+    width:100%; font-family:inherit; font-size:14.5px; padding:10px 12px;
+    border:1.5px solid var(--line); border-radius:10px; background:#fff; color:var(--text); direction:rtl;
+  }
+  .section-title{ font-size:13px; font-weight:700; color:var(--teal); margin:0 0 12px; }
+  .btn-primary{
+    width:100%; background:var(--deep); color:#fff; border:none; border-radius:12px;
+    padding:14px; font-family:inherit; font-size:15px; font-weight:700; cursor:pointer;
+  }
+  .btn-primary:disabled{ background:#9AAAB4; }
+  .hint{ font-size:12px; color:var(--muted); line-height:1.5; }
+
+  /* ===== Analysis view ===== */
+  #viewAnalysis{ padding-bottom:30px; }
+  .date-range-row{ display:flex; gap:10px; margin-bottom:14px; }
+  .date-range-row .field{ flex:1; margin-bottom:0; }
+  .stat-grid{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+  .stat-box{
+    flex:1; min-width:100px; background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:12px; text-align:center;
+  }
+  .stat-box .num{ font-size:22px; font-weight:900; color:var(--navy); }
+  .stat-box .lbl{ font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .breakdown-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 0; border-bottom:1px solid var(--line); font-size:13.5px;
+  }
+  .breakdown-row:last-child{ border-bottom:none; }
+  .breakdown-row .n{ font-weight:700; color:var(--navy); background:#EEF3F5; padding:2px 10px; border-radius:20px; font-size:12px; }
 
   /* ===== Toast ===== */
   #toast{
@@ -227,7 +267,9 @@
   .modal-box{ background:#fff; border-radius:16px; padding:20px; width:100%; max-width:360px; }
   .modal-box h3{ margin:0 0 5px; font-size:16px; color:var(--navy); }
   .modal-box p.sub{ margin:0 0 14px; font-size:12.5px; color:var(--muted); }
-  .modal-box input{ margin-bottom:16px; width:100%; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-family:inherit; font-size:15px; direction:rtl; }
+  .modal-box input, .modal-box select, .modal-box textarea{ margin-bottom:14px; width:100%; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-family:inherit; font-size:14.5px; direction:rtl; background:#fff; }
+  .modal-box label{ display:block; font-size:12.5px; font-weight:700; color:var(--navy); margin-bottom:6px; }
+  .modal-box textarea{ min-height:70px; resize:vertical; }
   .modal-actions{ display:flex; gap:10px; }
   .modal-actions button{ flex:1; padding:12px; border-radius:10px; border:none; font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; }
   .modal-actions .cancel{ background:#EEF2F4; color:var(--muted); }
@@ -244,6 +286,7 @@
 <nav class="tabs">
   <button id="tabChatBtn" class="active">المحادثة</button>
   <button id="tabListBtn">السجلات</button>
+  <button id="tabAnalysisBtn">التحليل</button>
 </nav>
 
 <main>
@@ -294,6 +337,29 @@
     <div id="recordsContainer">
       <div class="empty"><p>جاري تحميل السجلات...</p></div>
     </div>
+  </div>
+
+  <!-- ============================================================
+       View 3: تحليل وتصدير سجلات فترة محددة
+       ============================================================ -->
+  <div id="viewAnalysis" class="view">
+    <div class="card">
+      <div class="section-title">اختر الفترة</div>
+      <div class="date-range-row">
+        <div class="field">
+          <label>من تاريخ</label>
+          <input type="date" id="analysisFrom">
+        </div>
+        <div class="field">
+          <label>إلى تاريخ</label>
+          <input type="date" id="analysisTo">
+        </div>
+      </div>
+      <button type="button" class="btn-primary" id="exportExcelBtn">📊 تصدير Excel (سجلات + تحليل)</button>
+      <div class="hint" style="margin-top:10px;">الملف بيتكوّن من صفحتين: صفحة فيها كل السجلات بالتفصيل، وصفحة فيها تحليل ملخّص لنفس الفترة.</div>
+    </div>
+
+    <div id="analysisSummary"></div>
   </div>
 
 </main>
@@ -362,6 +428,34 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="editRecordModal">
+  <div class="modal-box">
+    <h3>تحديث / تسكير الملاحظة</h3>
+    <p class="sub" id="editRecordSub"></p>
+
+    <label>الحالة</label>
+    <select id="editStatus">
+      <option value="مفتوحة">مفتوحة</option>
+      <option value="قيد المعالجة">قيد المعالجة</option>
+      <option value="مغلقة">مغلقة</option>
+    </select>
+
+    <label>المسؤول عن المتابعة</label>
+    <select id="editOwner"></select>
+
+    <label>الإجراء المتخذ</label>
+    <textarea id="editAction" placeholder="اكتب الإجراء الذي تم اتخاذه"></textarea>
+
+    <label>ساعات التوقف الناتجة</label>
+    <input type="number" id="editDowntime" min="0" step="0.5">
+
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="editRecordCancel">إلغاء</button>
+      <button type="button" class="confirm" id="editRecordConfirm">حفظ التحديث</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* =====================================================================
    1) إعدادات Firebase
@@ -401,20 +495,25 @@ if (!firebaseReady) {
 /* =====================================================================
    2) التنقل بين التبويبين
    ===================================================================== */
-const tabChatBtn = document.getElementById("tabChatBtn");
-const tabListBtn = document.getElementById("tabListBtn");
-const viewChat   = document.getElementById("viewChat");
-const viewList   = document.getElementById("viewList");
-const composer   = document.getElementById("composer");
+const tabChatBtn     = document.getElementById("tabChatBtn");
+const tabListBtn     = document.getElementById("tabListBtn");
+const tabAnalysisBtn = document.getElementById("tabAnalysisBtn");
+const viewChat       = document.getElementById("viewChat");
+const viewList       = document.getElementById("viewList");
+const viewAnalysis   = document.getElementById("viewAnalysis");
+const composer       = document.getElementById("composer");
 
 tabChatBtn.addEventListener("click", () => switchTab("chat"));
 tabListBtn.addEventListener("click", () => switchTab("list"));
+tabAnalysisBtn.addEventListener("click", () => switchTab("analysis"));
 
 function switchTab(name){
   tabChatBtn.classList.toggle("active", name === "chat");
   tabListBtn.classList.toggle("active", name === "list");
+  tabAnalysisBtn.classList.toggle("active", name === "analysis");
   viewChat.classList.toggle("active", name === "chat");
   viewList.classList.toggle("active", name === "list");
+  viewAnalysis.classList.toggle("active", name === "analysis");
   composer.classList.toggle("show", name === "chat");
   if (name === "chat") {
     setTimeout(() => {
@@ -422,6 +521,9 @@ function switchTab(name){
       wrap.scrollTop = wrap.scrollHeight;
       window.scrollTo(0, document.body.scrollHeight);
     }, 50);
+  }
+  if (name === "analysis") {
+    renderAnalysisSummary();
   }
 }
 switchTab("chat");
@@ -868,13 +970,215 @@ function renderRecords(){
           ${r.owner ? `<span>المسؤول: ${r.owner}</span>` : ""}
           <span>المسجّل: ${r.reporterName}</span>
         </div>
+        <button type="button" class="rec-edit-btn" onclick="openEditRecord('${r.id}')">✏️ تحديث / تسكير الملاحظة</button>
       </div>
     </div>
   `).join("");
 }
 
+/* ---- تحديث حالة الملاحظة (إغلاقها، تعيين مسؤول، إجراء) ---- */
+const editRecordModal   = document.getElementById("editRecordModal");
+const editRecordSub     = document.getElementById("editRecordSub");
+const editStatus        = document.getElementById("editStatus");
+const editOwner         = document.getElementById("editOwner");
+const editAction        = document.getElementById("editAction");
+const editDowntime      = document.getElementById("editDowntime");
+const editRecordCancel  = document.getElementById("editRecordCancel");
+const editRecordConfirm = document.getElementById("editRecordConfirm");
+let editingRecordId = null;
+
+function openEditRecord(id){
+  const record = allRecords.find(r => r.id === id);
+  if (!record) return;
+  editingRecordId = id;
+  editRecordSub.textContent = `رقم السجل: ${record.recordId || ""} — ${record.dept} · أمر شغل ${record.jobOrder}`;
+  editStatus.value = record.status || "مفتوحة";
+  editAction.value = record.action || "";
+  editDowntime.value = record.downtime || 0;
+  editOwner.innerHTML = `<option value="">بدون تحديد</option>` +
+    allNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  editOwner.value = record.owner || "";
+  editRecordModal.classList.add("show");
+}
+
+editRecordCancel.addEventListener("click", () => {
+  editRecordModal.classList.remove("show");
+  editingRecordId = null;
+});
+
+editRecordConfirm.addEventListener("click", async () => {
+  if (!editingRecordId) return;
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+  editRecordConfirm.disabled = true;
+  try {
+    await db.collection(OBS_COLLECTION).doc(editingRecordId).update({
+      status: editStatus.value,
+      action: editAction.value.trim(),
+      owner: editOwner.value,
+      downtime: parseFloat(editDowntime.value) || 0,
+    });
+    editRecordModal.classList.remove("show");
+    showToast("تم تحديث الملاحظة بنجاح", "ok");
+    editingRecordId = null;
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر حفظ التحديث، تحقق من الاتصال", "err");
+  } finally {
+    editRecordConfirm.disabled = false;
+  }
+});
+
 /* =====================================================================
-   8) نافذة تكبير الصورة
+   8) تبويب التحليل — فلترة سجلات فترة محددة، عرض ملخّص، وتصدير Excel
+   ===================================================================== */
+const analysisFrom    = document.getElementById("analysisFrom");
+const analysisTo      = document.getElementById("analysisTo");
+const exportExcelBtn  = document.getElementById("exportExcelBtn");
+const analysisSummary = document.getElementById("analysisSummary");
+
+(function setDefaultAnalysisRange(){
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const toStr = (d) => d.toISOString().slice(0, 10);
+  analysisFrom.value = toStr(firstOfMonth);
+  analysisTo.value = toStr(today);
+})();
+
+analysisFrom.addEventListener("change", renderAnalysisSummary);
+analysisTo.addEventListener("change", renderAnalysisSummary);
+
+function getRecordsInRange(){
+  if (!analysisFrom.value || !analysisTo.value) return [];
+  const from = new Date(analysisFrom.value + "T00:00:00");
+  const to   = new Date(analysisTo.value + "T23:59:59");
+  return allRecords.filter(r => {
+    if (!r.createdAt || !r.createdAt.toDate) return false;
+    const d = r.createdAt.toDate();
+    return d >= from && d <= to;
+  });
+}
+
+function countBy(list, key){
+  const counts = {};
+  list.forEach(r => {
+    const k = r[key] || "غير محدد";
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  return counts;
+}
+
+function renderAnalysisSummary(){
+  const list = getRecordsInRange();
+
+  if (list.length === 0) {
+    analysisSummary.innerHTML = `
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19h16M7 15v4M12 9v10M17 5v14"/></svg>
+        <p>لا توجد سجلات بهذه الفترة</p>
+      </div>`;
+    return;
+  }
+
+  const totalDowntime = list.reduce((sum, r) => sum + (parseFloat(r.downtime) || 0), 0);
+  const byDept   = countBy(list, "dept");
+  const byType   = countBy(list, "issueType");
+  const byStatus = countBy(list, "status");
+
+  const breakdownHtml = (counts) => Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `<div class="breakdown-row"><span>${escapeHtml(k)}</span><span class="n">${v}</span></div>`)
+    .join("");
+
+  analysisSummary.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-box"><div class="num">${list.length}</div><div class="lbl">عدد الملاحظات</div></div>
+      <div class="stat-box"><div class="num">${totalDowntime}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
+      <div class="stat-box"><div class="num">${byStatus["مغلقة"] || 0}</div><div class="lbl">ملاحظات مغلقة</div></div>
+      <div class="stat-box"><div class="num">${(byStatus["مفتوحة"] || 0) + (byStatus["قيد المعالجة"] || 0)}</div><div class="lbl">لسا مفتوحة</div></div>
+    </div>
+    <div class="card">
+      <div class="section-title">حسب القسم</div>
+      ${breakdownHtml(byDept)}
+    </div>
+    <div class="card">
+      <div class="section-title">حسب نوع المشكلة</div>
+      ${breakdownHtml(byType)}
+    </div>
+    <div class="card">
+      <div class="section-title">حسب الحالة</div>
+      ${breakdownHtml(byStatus)}
+    </div>
+  `;
+}
+
+exportExcelBtn.addEventListener("click", () => {
+  const list = getRecordsInRange();
+  if (list.length === 0) {
+    showToast("ما في سجلات بهاي الفترة عشان نصدّرها", "err");
+    return;
+  }
+  if (typeof XLSX === "undefined") {
+    showToast("تعذّر تحميل مكتبة Excel، تأكد من الاتصال بالإنترنت وحاول مرة أخرى", "err");
+    return;
+  }
+
+  // ---- صفحة 1: السجلات بالتفصيل ----
+  const rows = list
+    .slice()
+    .sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0))
+    .map(r => {
+      const d = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate() : null;
+      return {
+        "رقم السجل": r.recordId || "",
+        "التاريخ": d ? d.toLocaleDateString("en-GB") : "",
+        "الوقت": d ? d.toLocaleTimeString("en-GB") : "",
+        "القسم": r.dept || "",
+        "رقم أمر الشغل": r.jobOrder || "",
+        "نوع المشكلة": r.issueType || "",
+        "الوصف": r.description || "",
+        "ساعات التوقف": r.downtime || 0,
+        "الإجراء المتخذ": r.action || "",
+        "المسؤول": r.owner || "",
+        "الحالة": r.status || "",
+        "المسجّل": r.reporterName || "",
+      };
+    });
+  const sheetRecords = XLSX.utils.json_to_sheet(rows);
+
+  // ---- صفحة 2: تحليل ملخّص لنفس الفترة ----
+  const totalDowntime = list.reduce((sum, r) => sum + (parseFloat(r.downtime) || 0), 0);
+  const byDept   = countBy(list, "dept");
+  const byType   = countBy(list, "issueType");
+  const byStatus = countBy(list, "status");
+
+  const aoa = [
+    ["تحليل ملخّص — من", analysisFrom.value, "إلى", analysisTo.value],
+    [],
+    ["إجمالي عدد الملاحظات", list.length],
+    ["إجمالي ساعات التوقف", totalDowntime],
+    ["متوسط ساعات التوقف لكل ملاحظة", list.length ? +(totalDowntime / list.length).toFixed(2) : 0],
+    [],
+    ["حسب القسم"],
+    ...Object.entries(byDept).sort((a, b) => b[1] - a[1]),
+    [],
+    ["حسب نوع المشكلة"],
+    ...Object.entries(byType).sort((a, b) => b[1] - a[1]),
+    [],
+    ["حسب الحالة"],
+    ...Object.entries(byStatus).sort((a, b) => b[1] - a[1]),
+  ];
+  const sheetAnalysis = XLSX.utils.aoa_to_sheet(aoa);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheetRecords, "السجلات");
+  XLSX.utils.book_append_sheet(wb, sheetAnalysis, "التحليل");
+
+  const fileName = `سجلات P2-H3 (${analysisFrom.value} الى ${analysisTo.value}).xlsx`;
+  XLSX.writeFile(wb, fileName);
+});
+
+/* =====================================================================
+   9) نافذة تكبير الصورة
    ===================================================================== */
 const imgModal = document.getElementById("imgModal");
 const imgModalImg = document.getElementById("imgModalImg");
@@ -887,7 +1191,7 @@ function openImage(url){
 }
 
 /* =====================================================================
-   9) رسائل التنبيه (Toast)
+   10) رسائل التنبيه (Toast)
    ===================================================================== */
 let toastTimer = null;
 function showToast(msg, type){
