@@ -14,6 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 
 <style>
   :root{
@@ -142,10 +143,10 @@
   .composer-photo-preview img{ width:56px; height:56px; border-radius:10px; object-fit:cover; border:1px solid var(--line); }
   .composer-photo-preview button{ background:none; border:none; color:var(--danger); font-weight:700; font-size:13px; cursor:pointer; }
 
-  .quick-fields-row{ display:none; gap:8px; padding:10px 14px 0; }
-  .quick-fields-row.show{ display:flex; }
+  .quick-fields-row{ display:none; grid-template-columns:1fr 1fr; gap:8px; padding:10px 14px 0; }
+  .quick-fields-row.show{ display:grid; }
   .quick-fields-row select, .quick-fields-row input{
-    flex:1; min-width:0; font-size:12.5px; padding:9px 8px;
+    min-width:0; font-size:12.5px; padding:9px 8px;
     border:1.5px solid var(--line); border-radius:9px; direction:rtl; font-family:inherit; background:#fff;
   }
   .quick-fields-hint{ font-size:11.5px; color:var(--amber-dark); padding:6px 14px 0; font-weight:700; }
@@ -197,9 +198,18 @@
   .rec-meta{ font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px; }
   #viewList main-pad{ padding-bottom: 40px; }
   #viewList{ padding-bottom:30px; }
+  .rec-actions{ display:flex; gap:8px; margin-top:8px; }
   .rec-edit-btn{
     background:#EEF3F5; color:var(--teal); border:none; border-radius:8px;
     padding:5px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0;
+  }
+  .rec-delete-btn{
+    background:#FBE8E4; color:var(--danger); border:none; border-radius:8px;
+    padding:5px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0;
+  }
+  .obs-delete-btn{
+    background:#FBE8E4; color:var(--danger); border:none; border-radius:8px;
+    padding:5px 10px; font-family:inherit; font-size:11px; font-weight:700; cursor:pointer; margin-top:8px;
   }
 
   /* ===== Generic card/field styles (used by Analysis view) ===== */
@@ -236,6 +246,7 @@
   }
   .breakdown-row:last-child{ border-bottom:none; }
   .breakdown-row .n{ font-weight:700; color:var(--navy); background:#EEF3F5; padding:2px 10px; border-radius:20px; font-size:12px; }
+  .chart-wrap{ position:relative; height:190px; width:100%; direction:ltr; }
 
   /* ===== Toast ===== */
   #toast{
@@ -359,7 +370,44 @@
       <div class="hint" style="margin-top:10px;">الملف بيتكوّن من صفحتين: صفحة فيها كل السجلات بالتفصيل، وصفحة فيها تحليل ملخّص لنفس الفترة.</div>
     </div>
 
-    <div id="analysisSummary"></div>
+    <div id="analysisEmpty" class="empty" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19h16M7 15v4M12 9v10M17 5v14"/></svg>
+      <p>لا توجد سجلات بهذه الفترة</p>
+    </div>
+
+    <div id="analysisContent">
+      <div id="statGrid" class="stat-grid"></div>
+
+      <div class="card">
+        <div class="section-title">عدد الملاحظات حسب القسم</div>
+        <div class="chart-wrap"><canvas id="chartByDept"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="section-title">عدد الملاحظات حسب نوع المشكلة</div>
+        <div class="chart-wrap"><canvas id="chartByType"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="section-title">توزيع الحالات</div>
+        <div class="chart-wrap" style="height:220px;"><canvas id="chartByStatus"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="section-title">ساعات التوقف حسب القسم</div>
+        <div class="chart-wrap"><canvas id="chartDowntime"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">حسب القسم</div>
+        <div id="breakdownDept"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">حسب نوع المشكلة</div>
+        <div id="breakdownType"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">حسب الحالة</div>
+        <div id="breakdownStatus"></div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -391,6 +439,7 @@
       <option>تصميم</option>
       <option>بشري</option>
     </select>
+    <input type="text" id="quickSerial" placeholder="S/N (اختياري)">
   </div>
 
   <div class="composer-main-row">
@@ -448,6 +497,9 @@
 
     <label>ساعات التوقف الناتجة</label>
     <input type="number" id="editDowntime" min="0" step="0.5">
+
+    <label>الرقم التسلسلي (S/N)</label>
+    <input type="text" id="editSerial" placeholder="مثلاً 0101001">
 
     <div class="modal-actions">
       <button type="button" class="cancel" id="editRecordCancel">إلغاء</button>
@@ -543,6 +595,21 @@ const BASE_NAMES = [
 
 let customNames = [];
 let allNames = [...BASE_NAMES];
+let allRecords = []; // بيانات الملاحظات — تُستخدم بتبويب السجلات وبتبويب التحليل
+let chatMsgs = [];
+let obsMsgs  = [];
+
+/* =====================================================================
+   صلاحية الأدمن — فقط الأسماء الموجودة هنا تقدر تحذف ملاحظة.
+   لإضافة أدمن جديد لاحقاً: أضف اسمه هون بالضبط متل ما هو مكتوب بقائمة
+   الأسماء (نفس الحروف تماماً)، وارفع الملف المحدّث مكان القديم.
+   ===================================================================== */
+const ADMIN_NAMES = [
+  "يوسف كتكت"
+];
+function isAdmin(){
+  return ADMIN_NAMES.includes(chatIdentitySel.value);
+}
 
 const chatIdentitySel = document.getElementById("chatIdentity");
 const nameSelects = [chatIdentitySel];
@@ -581,6 +648,7 @@ function renderNameOptions(){
     chatIdentitySel.value = savedIdentity;
     chatIdentitySel.dataset.restored = "1";
     rebuildFeed();
+    renderRecords();
   }
 }
 
@@ -597,6 +665,7 @@ function handleNameSelectChange(e){
     if (sel === chatIdentitySel) {
       localStorage.setItem(IDENTITY_KEY, sel.value);
       rebuildFeed();
+      renderRecords();
     }
   }
 }
@@ -726,6 +795,7 @@ const quickFieldsHint= document.getElementById("quickFieldsHint");
 const quickDept      = document.getElementById("quickDept");
 const quickJobOrder  = document.getElementById("quickJobOrder");
 const quickIssueType = document.getElementById("quickIssueType");
+const quickSerial    = document.getElementById("quickSerial");
 const composerText   = document.getElementById("composerText");
 const sendBtn        = document.getElementById("sendBtn");
 
@@ -778,6 +848,7 @@ async function handleSend(){
     const dept = quickDept.value;
     const jobOrder = quickJobOrder.value.trim();
     const issueType = quickIssueType.value;
+    const serialNumber = quickSerial.value.trim();
     const description = composerText.value.trim();
 
     if (!dept || !jobOrder || !issueType || !description) {
@@ -791,7 +862,7 @@ async function handleSend(){
       await db.collection(OBS_COLLECTION).add({
         recordId,
         reporterName: identity,
-        dept, jobOrder, issueType, description,
+        dept, jobOrder, issueType, serialNumber, description,
         downtime: 0,
         action: "",
         owner: "",
@@ -800,7 +871,7 @@ async function handleSend(){
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       showToast(`تم حفظ الملاحظة برقم ${recordId}`, "ok");
-      quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = "";
+      quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = ""; quickSerial.value = "";
       clearComposer();
       setLogMode(false);
     } catch (err) {
@@ -835,9 +906,6 @@ async function handleSend(){
    6) القائمة الموحّدة (رسائل حرة + بطاقات ملاحظات رسمية) بترتيب زمني واحد
    ===================================================================== */
 const chatMessagesEl = document.getElementById("chatMessages");
-let chatMsgs = [];
-let obsMsgs  = [];
-let allRecords = []; // نفس بيانات الملاحظات، تُستخدم أيضاً بتبويب السجلات
 
 function tsOf(m){ return (m.createdAt && m.createdAt.toMillis) ? m.createdAt.toMillis() : Date.now(); }
 
@@ -857,7 +925,7 @@ if (firebaseReady) {
   }, (err) => console.error(err));
 
   db.collection(OBS_COLLECTION).orderBy("createdAt", "desc").limit(200).onSnapshot((snap) => {
-    obsMsgs = snap.docs.map(d => d.data());
+    obsMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     allRecords = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     rebuildFeed();
     renderRecords();
@@ -895,11 +963,12 @@ function renderFeed(list){
             <span class="obs-tag">📋 ملاحظة رسمية</span>
             <span class="badge ${statusBadgeClass(m.status)}">${m.status}</span>
           </div>
-          <div class="obs-id">${m.recordId || ""}</div>
+          <div class="obs-id">${m.recordId || ""}${m.serialNumber ? ` · S/N: ${escapeHtml(m.serialNumber)}` : ""}</div>
           <div class="obs-dept">${m.dept} — أمر شغل ${escapeHtml(m.jobOrder)} · ${m.issueType}</div>
           <div class="obs-desc">${escapeHtml(m.description)}</div>
           ${m.photoUrl ? `<img class="obs-photo" src="${m.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${m.photoUrl}')">` : ""}
           <div class="obs-meta">${escapeHtml(m.reporterName)} · ${time}</div>
+          ${isAdmin() ? `<button type="button" class="obs-delete-btn" onclick="deleteRecord('${m.id}')">🗑️ حذف الملاحظة</button>` : ""}
         </div>`;
     }
 
@@ -959,7 +1028,7 @@ function renderRecords(){
         : `<div class="rec-thumb"></div>`}
       <div class="rec-body">
         <div class="rec-top">
-          <span class="rec-id">${r.recordId || ""}</span>
+          <span class="rec-id">${r.recordId || ""}${r.serialNumber ? ` · S/N: ${escapeHtml(r.serialNumber)}` : ""}</span>
           <span class="badge ${statusBadgeClass(r.status)}">${r.status}</span>
         </div>
         <div class="rec-dept">${r.dept} — أمر شغل ${escapeHtml(r.jobOrder)}</div>
@@ -970,10 +1039,29 @@ function renderRecords(){
           ${r.owner ? `<span>المسؤول: ${r.owner}</span>` : ""}
           <span>المسجّل: ${r.reporterName}</span>
         </div>
-        <button type="button" class="rec-edit-btn" onclick="openEditRecord('${r.id}')">✏️ تحديث / تسكير الملاحظة</button>
+        <div class="rec-actions">
+          <button type="button" class="rec-edit-btn" onclick="openEditRecord('${r.id}')">✏️ تحديث / تسكير الملاحظة</button>
+          ${isAdmin() ? `<button type="button" class="rec-delete-btn" onclick="deleteRecord('${r.id}')">🗑️ حذف</button>` : ""}
+        </div>
       </div>
     </div>
   `).join("");
+}
+
+async function deleteRecord(id){
+  if (!isAdmin()) return;
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+  const record = allRecords.find(r => r.id === id) || obsMsgs.find(r => r.id === id);
+  const label = record ? (record.recordId || "") : "";
+  const ok = confirm(`متأكد إنك بدك تحذف الملاحظة ${label}؟ هذا الإجراء لا يمكن التراجع عنه.`);
+  if (!ok) return;
+  try {
+    await db.collection(OBS_COLLECTION).doc(id).delete();
+    showToast("تم حذف الملاحظة", "ok");
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر حذف الملاحظة، تحقق من الاتصال", "err");
+  }
 }
 
 /* ---- تحديث حالة الملاحظة (إغلاقها، تعيين مسؤول، إجراء) ---- */
@@ -983,6 +1071,7 @@ const editStatus        = document.getElementById("editStatus");
 const editOwner         = document.getElementById("editOwner");
 const editAction        = document.getElementById("editAction");
 const editDowntime      = document.getElementById("editDowntime");
+const editSerial        = document.getElementById("editSerial");
 const editRecordCancel  = document.getElementById("editRecordCancel");
 const editRecordConfirm = document.getElementById("editRecordConfirm");
 let editingRecordId = null;
@@ -995,6 +1084,7 @@ function openEditRecord(id){
   editStatus.value = record.status || "مفتوحة";
   editAction.value = record.action || "";
   editDowntime.value = record.downtime || 0;
+  editSerial.value = record.serialNumber || "";
   editOwner.innerHTML = `<option value="">بدون تحديد</option>` +
     allNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
   editOwner.value = record.owner || "";
@@ -1016,6 +1106,7 @@ editRecordConfirm.addEventListener("click", async () => {
       action: editAction.value.trim(),
       owner: editOwner.value,
       downtime: parseFloat(editDowntime.value) || 0,
+      serialNumber: editSerial.value.trim(),
     });
     editRecordModal.classList.remove("show");
     showToast("تم تحديث الملاحظة بنجاح", "ok");
@@ -1034,7 +1125,31 @@ editRecordConfirm.addEventListener("click", async () => {
 const analysisFrom    = document.getElementById("analysisFrom");
 const analysisTo      = document.getElementById("analysisTo");
 const exportExcelBtn  = document.getElementById("exportExcelBtn");
-const analysisSummary = document.getElementById("analysisSummary");
+const analysisEmpty   = document.getElementById("analysisEmpty");
+const analysisContent = document.getElementById("analysisContent");
+
+if (typeof Chart !== "undefined") {
+  Chart.defaults.font.family = "'Tajawal', Tahoma, Arial, sans-serif";
+  Chart.defaults.color = "#5B6672";
+  // إيقاف الحركة الانتقالية: نتجنب هيك أي وميض بصري عند تغيير الفترة بسرعة
+  // (كل تغيير بالتاريخ بيهدم الرسم القديم ويبني رسم جديد فوراً على نفس الكانفاس)
+  Chart.defaults.animation = false;
+}
+const chartInstances = {};
+function renderOrUpdateChart(canvasId, config){
+  if (typeof Chart === "undefined") return;
+  const existing = chartInstances[canvasId];
+  if (existing) {
+    // نحدّث الرسم القائم بمكانه بدل هدمه وإعادة بنائه — أكثر استقراراً
+    // ويتجنّب أي وميض أو خلل بصري عابر عند تبديل الفترة بسرعة
+    existing.data.labels = config.data.labels;
+    existing.data.datasets = config.data.datasets;
+    existing.update();
+    return;
+  }
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  chartInstances[canvasId] = new Chart(ctx, config);
+}
 
 (function setDefaultAnalysisRange(){
   const today = new Date();
@@ -1067,48 +1182,77 @@ function countBy(list, key){
   return counts;
 }
 
+function sumBy(list, key, valueKey){
+  const sums = {};
+  list.forEach(r => {
+    const k = r[key] || "غير محدد";
+    sums[k] = (sums[k] || 0) + (parseFloat(r[valueKey]) || 0);
+  });
+  return sums;
+}
+
+const CHART_COLORS = ["#065A82", "#1C7293", "#E8A33D", "#21295C", "#B3432E", "#1E7A4C", "#7A5316"];
+const STATUS_COLORS = { "مفتوحة": "#B3432E", "قيد المعالجة": "#C6821E", "مغلقة": "#1E7A4C" };
+
 function renderAnalysisSummary(){
   const list = getRecordsInRange();
 
   if (list.length === 0) {
-    analysisSummary.innerHTML = `
-      <div class="empty">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19h16M7 15v4M12 9v10M17 5v14"/></svg>
-        <p>لا توجد سجلات بهذه الفترة</p>
-      </div>`;
+    analysisEmpty.style.display = "block";
+    analysisContent.style.display = "none";
     return;
   }
+  analysisEmpty.style.display = "none";
+  analysisContent.style.display = "block";
 
   const totalDowntime = list.reduce((sum, r) => sum + (parseFloat(r.downtime) || 0), 0);
-  const byDept   = countBy(list, "dept");
-  const byType   = countBy(list, "issueType");
-  const byStatus = countBy(list, "status");
+  const byDept        = countBy(list, "dept");
+  const byType        = countBy(list, "issueType");
+  const byStatus      = countBy(list, "status");
+  const downtimeByDept = sumBy(list, "dept", "downtime");
 
   const breakdownHtml = (counts) => Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `<div class="breakdown-row"><span>${escapeHtml(k)}</span><span class="n">${v}</span></div>`)
     .join("");
 
-  analysisSummary.innerHTML = `
-    <div class="stat-grid">
-      <div class="stat-box"><div class="num">${list.length}</div><div class="lbl">عدد الملاحظات</div></div>
-      <div class="stat-box"><div class="num">${totalDowntime}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
-      <div class="stat-box"><div class="num">${byStatus["مغلقة"] || 0}</div><div class="lbl">ملاحظات مغلقة</div></div>
-      <div class="stat-box"><div class="num">${(byStatus["مفتوحة"] || 0) + (byStatus["قيد المعالجة"] || 0)}</div><div class="lbl">لسا مفتوحة</div></div>
-    </div>
-    <div class="card">
-      <div class="section-title">حسب القسم</div>
-      ${breakdownHtml(byDept)}
-    </div>
-    <div class="card">
-      <div class="section-title">حسب نوع المشكلة</div>
-      ${breakdownHtml(byType)}
-    </div>
-    <div class="card">
-      <div class="section-title">حسب الحالة</div>
-      ${breakdownHtml(byStatus)}
-    </div>
+  document.getElementById("statGrid").innerHTML = `
+    <div class="stat-box"><div class="num">${list.length}</div><div class="lbl">عدد الملاحظات</div></div>
+    <div class="stat-box"><div class="num">${totalDowntime}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
+    <div class="stat-box"><div class="num">${byStatus["مغلقة"] || 0}</div><div class="lbl">ملاحظات مغلقة</div></div>
+    <div class="stat-box"><div class="num">${(byStatus["مفتوحة"] || 0) + (byStatus["قيد المعالجة"] || 0)}</div><div class="lbl">لسا مفتوحة</div></div>
   `;
+  document.getElementById("breakdownDept").innerHTML = breakdownHtml(byDept);
+  document.getElementById("breakdownType").innerHTML = breakdownHtml(byType);
+  document.getElementById("breakdownStatus").innerHTML = breakdownHtml(byStatus);
+
+  const deptLabels = Object.keys(byDept);
+  renderOrUpdateChart("chartByDept", {
+    type: "bar",
+    data: { labels: deptLabels, datasets: [{ data: Object.values(byDept), backgroundColor: CHART_COLORS, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  const typeLabels = Object.keys(byType);
+  renderOrUpdateChart("chartByType", {
+    type: "bar",
+    data: { labels: typeLabels, datasets: [{ data: Object.values(byType), backgroundColor: CHART_COLORS, borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  const statusLabels = Object.keys(byStatus);
+  renderOrUpdateChart("chartByStatus", {
+    type: "doughnut",
+    data: { labels: statusLabels, datasets: [{ data: Object.values(byStatus), backgroundColor: statusLabels.map(s => STATUS_COLORS[s] || "#5B6672") }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+  });
+
+  const deptDowntimeLabels = Object.keys(downtimeByDept);
+  renderOrUpdateChart("chartDowntime", {
+    type: "bar",
+    data: { labels: deptDowntimeLabels, datasets: [{ data: Object.values(downtimeByDept), backgroundColor: "#E8A33D", borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
 }
 
 exportExcelBtn.addEventListener("click", () => {
@@ -1134,6 +1278,7 @@ exportExcelBtn.addEventListener("click", () => {
         "الوقت": d ? d.toLocaleTimeString("en-GB") : "",
         "القسم": r.dept || "",
         "رقم أمر الشغل": r.jobOrder || "",
+        "الرقم التسلسلي (S/N)": r.serialNumber || "",
         "نوع المشكلة": r.issueType || "",
         "الوصف": r.description || "",
         "ساعات التوقف": r.downtime || 0,
