@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>سجل ملاحظات الإنتاج — هنجر P2-H3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     Firebase (نسخة compat المبسّطة — لا تحتاج أدوات بناء)
+     ============================================================ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --navy:#21295C;
+    --deep:#065A82;
+    --teal:#1C7293;
+    --amber:#E8A33D;
+    --amber-dark:#C6821E;
+    --bg:#F4F8FA;
+    --card:#FFFFFF;
+    --line:#E2E9EC;
+    --text:#1B1E23;
+    --muted:#5B6672;
+    --danger:#B3432E;
+    --ok:#1E7A4C;
+    --wait:#C6821E;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family:'Tajawal', Tahoma, Arial, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+  }
+
+  /* ===== Header ===== */
+  header{
+    background:var(--navy);
+    color:#fff;
+    padding:20px 18px 16px;
+    position:sticky; top:0; z-index:20;
+  }
+  header h1{ margin:0 0 3px; font-size:19px; font-weight:700; }
+  header p{ margin:0; font-size:13px; color:#B9C6E0; font-weight:400; }
+
+  /* ===== Tabs ===== */
+  nav.tabs{
+    display:flex;
+    background:var(--navy);
+    padding:0 12px;
+    position:sticky; top:70px; z-index:19;
+    box-shadow:0 2px 6px rgba(0,0,0,.12);
+  }
+  nav.tabs button{
+    flex:1;
+    background:transparent;
+    border:none;
+    color:#9FB0D6;
+    font-family:inherit;
+    font-size:14.5px;
+    font-weight:700;
+    padding:12px 6px;
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+  }
+  nav.tabs button.active{ color:#fff; border-bottom:3px solid var(--amber); }
+
+  main{ max-width:640px; margin:0 auto; padding:14px 14px 0; }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  /* ===== Chat identity bar ===== */
+  #chatIdentityBar{
+    display:flex; align-items:center; gap:10px;
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:10px 12px; margin-bottom:12px;
+  }
+  #chatIdentityBar label{ margin:0; font-size:13px; font-weight:700; color:var(--navy); white-space:nowrap; }
+  #chatIdentityBar select{ flex:1; padding:8px 10px; font-size:13.5px; border:1.5px solid var(--line); border-radius:9px; direction:rtl; font-family:inherit; }
+
+  .config-warning{
+    background:#FBEED9; border:1px solid #EFCB8C; color:#7A5316;
+    border-radius:12px; padding:14px; font-size:13px; line-height:1.6; margin-bottom:14px;
+  }
+
+  /* ===== Feed ===== */
+  #feedWrap{ padding-bottom:190px; }
+  #chatMessages{ display:flex; flex-direction:column; gap:10px; min-height:120px; }
+
+  .msg-row{ display:flex; }
+  .msg-row.mine{ justify-content:flex-start; }
+  .msg-row.theirs{ justify-content:flex-end; }
+  .bubble{ max-width:80%; padding:9px 13px; border-radius:16px; font-size:14.5px; line-height:1.5; }
+  .bubble .sender{ font-size:11.5px; font-weight:700; margin-bottom:3px; display:block; color:var(--teal); }
+  .mine .bubble{ background:var(--deep); color:#fff; }
+  .theirs .bubble{ background:#fff; border:1px solid var(--line); color:var(--text); }
+  .bubble .text{ white-space:pre-wrap; word-break:break-word; }
+  .bubble .time{ font-size:10px; opacity:.65; margin-top:4px; display:block; }
+  .bubble .chat-photo{ max-width:100%; border-radius:10px; display:block; margin-bottom:6px; cursor:pointer; }
+
+  /* ===== Observation card (inline in feed) ===== */
+  .obs-card{
+    background:#fff; border:1px solid var(--line); border-right:4px solid var(--amber);
+    border-radius:12px; padding:12px 14px;
+  }
+  .obs-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; }
+  .obs-tag{ font-size:11px; font-weight:700; color:var(--amber-dark); background:#FBEED9; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .badge{ font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .badge.open{ background:#FBE8E4; color:var(--danger); }
+  .badge.wip{ background:#FBEED9; color:var(--wait); }
+  .badge.closed{ background:#E1F2E8; color:var(--ok); }
+  .obs-id{ font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:4px; }
+  .obs-dept{ font-size:14px; font-weight:700; color:var(--navy); margin-bottom:5px; }
+  .obs-desc{ font-size:13.5px; line-height:1.55; color:var(--text); margin-bottom:8px; white-space:pre-wrap; word-break:break-word; }
+  .obs-photo{ width:100%; max-width:240px; border-radius:10px; display:block; margin-bottom:8px; cursor:pointer; }
+  .obs-meta{ font-size:11.5px; color:var(--muted); }
+
+  .empty{ text-align:center; padding:50px 20px; color:var(--muted); }
+  .empty svg{ width:52px; height:52px; opacity:.35; margin-bottom:10px; }
+  .empty p{ margin:0; font-size:14px; }
+
+  /* ===== Composer (fixed bottom bar) ===== */
+  #composer{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+    width:100%; max-width:640px;
+    background:#fff; border-top:1px solid var(--line);
+    z-index:60;
+    display:none;
+  }
+  #composer.show{ display:block; }
+
+  .composer-photo-preview{ display:none; align-items:center; gap:10px; padding:10px 14px 0; }
+  .composer-photo-preview.show{ display:flex; }
+  .composer-photo-preview img{ width:56px; height:56px; border-radius:10px; object-fit:cover; border:1px solid var(--line); }
+  .composer-photo-preview button{ background:none; border:none; color:var(--danger); font-weight:700; font-size:13px; cursor:pointer; }
+
+  .quick-fields-row{ display:none; gap:8px; padding:10px 14px 0; }
+  .quick-fields-row.show{ display:flex; }
+  .quick-fields-row select, .quick-fields-row input{
+    flex:1; min-width:0; font-size:12.5px; padding:9px 8px;
+    border:1.5px solid var(--line); border-radius:9px; direction:rtl; font-family:inherit; background:#fff;
+  }
+  .quick-fields-hint{ font-size:11.5px; color:var(--amber-dark); padding:6px 14px 0; font-weight:700; }
+
+  .composer-main-row{ display:flex; align-items:flex-end; gap:8px; padding:10px 14px; }
+  .icon-btn{
+    width:42px; height:42px; border-radius:50%; border:none; background:#EEF3F5; color:var(--teal);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; padding:0;
+  }
+  .icon-btn svg{ width:20px; height:20px; }
+  .pill-btn{
+    display:flex; align-items:center; gap:6px; flex-shrink:0;
+    background:#EEF3F5; color:var(--teal); border:none; border-radius:20px;
+    padding:0 14px; height:42px; font-family:inherit; font-weight:700; font-size:12.5px; cursor:pointer;
+  }
+  .pill-btn svg{ width:16px; height:16px; }
+  .pill-btn.active{ background:var(--amber); color:#fff; }
+
+  #composerText{
+    flex:1; resize:none; max-height:90px; min-height:42px;
+    border:1.5px solid var(--line); border-radius:20px; padding:10px 16px;
+    font-family:inherit; font-size:14.5px; direction:rtl;
+  }
+  #composerText:focus{ outline:none; border-color:var(--teal); }
+
+  #sendBtn{
+    width:44px; height:44px; border-radius:50%; border:none;
+    background:var(--deep); color:#fff; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  #sendBtn.log-mode{ background:var(--amber-dark); }
+  #sendBtn svg{ width:20px; height:20px; }
+  #sendBtn:disabled{ background:#9AAAB4; }
+
+  /* ===== Records list (unchanged tab) ===== */
+  .filters{ display:flex; gap:8px; margin-bottom:14px; }
+  .filters select{ padding:9px 10px; font-size:13.5px; border:1.5px solid var(--line); border-radius:9px; direction:rtl; font-family:inherit; background:#fff; flex:1; }
+
+  .rec-card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px; margin-bottom:12px; display:flex; gap:12px;
+  }
+  .rec-thumb{ width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0; background:#EEF3F5; cursor:pointer; }
+  .rec-body{ flex:1; min-width:0; }
+  .rec-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px; }
+  .rec-id{ font-size:12.5px; color:var(--muted); font-weight:700; }
+  .rec-dept{ font-size:14.5px; font-weight:700; color:var(--navy); margin-bottom:3px; }
+  .rec-desc{ font-size:13.5px; color:var(--text); line-height:1.5; margin-bottom:5px; }
+  .rec-meta{ font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px; }
+  #viewList main-pad{ padding-bottom: 40px; }
+  #viewList{ padding-bottom:30px; }
+
+  /* ===== Toast ===== */
+  #toast{
+    position:fixed; bottom:22px; left:50%;
+    transform:translateX(-50%) translateY(120px);
+    background:var(--navy); color:#fff; padding:13px 22px; border-radius:30px;
+    font-size:14px; font-weight:700; box-shadow:0 6px 18px rgba(0,0,0,.25);
+    transition:transform .25s ease; z-index:400; max-width:88%; text-align:center;
+  }
+  #toast.show{ transform:translateX(-50%) translateY(0); }
+  #toast.err{ background:var(--danger); }
+  #toast.ok{ background:var(--ok); }
+
+  /* ===== Image viewer modal ===== */
+  #imgModal{
+    display:none; position:fixed; inset:0; background:rgba(10,14,25,.92);
+    z-index:400; align-items:center; justify-content:center; padding:20px;
+  }
+  #imgModal.show{ display:flex; }
+  #imgModal img{ max-width:100%; max-height:85vh; border-radius:10px; }
+  #imgModal .close{ position:absolute; top:18px; left:18px; color:#fff; font-size:26px; background:none; border:none; cursor:pointer; }
+
+  /* ===== Add-name modal ===== */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(10,14,25,.55);
+    align-items:center; justify-content:center; z-index:500; padding:20px;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-box{ background:#fff; border-radius:16px; padding:20px; width:100%; max-width:360px; }
+  .modal-box h3{ margin:0 0 5px; font-size:16px; color:var(--navy); }
+  .modal-box p.sub{ margin:0 0 14px; font-size:12.5px; color:var(--muted); }
+  .modal-box input{ margin-bottom:16px; width:100%; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-family:inherit; font-size:15px; direction:rtl; }
+  .modal-actions{ display:flex; gap:10px; }
+  .modal-actions button{ flex:1; padding:12px; border-radius:10px; border:none; font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; }
+  .modal-actions .cancel{ background:#EEF2F4; color:var(--muted); }
+  .modal-actions .confirm{ background:var(--deep); color:#fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>سجل ملاحظات الإنتاج</h1>
+  <p>لجنة الجودة التحسينية — هنجر P2-H3</p>
+</header>
+
+<nav class="tabs">
+  <button id="tabChatBtn" class="active">المحادثة</button>
+  <button id="tabListBtn">السجلات</button>
+</nav>
+
+<main>
+
+  <!-- ============================================================
+       View 1: Unified Chat + Quick Observation Logging
+       ============================================================ -->
+  <div id="viewChat" class="view active">
+
+    <div id="configWarning" class="config-warning" style="display:none;">
+      إعدادات Firebase غير مضبوطة بعد. افتح الملف بمحرر نصوص وابحث عن
+      <b>firebaseConfig</b> في نهاية الصفحة، وضع فيه بيانات مشروعك على Firebase.
+    </div>
+
+    <div id="chatIdentityBar">
+      <label for="chatIdentity">أنت:</label>
+      <select id="chatIdentity" data-placeholder="اختر اسمك"></select>
+    </div>
+
+    <div id="feedWrap">
+      <div id="chatMessages">
+        <div class="empty"><p>لا توجد رسائل بعد، ابدأ المحادثة أو سجّل أول ملاحظة</p></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       View 2: Records List (كما هي، بدون تعديل على منطقها)
+       ============================================================ -->
+  <div id="viewList" class="view">
+    <div class="filters">
+      <select id="filterDept">
+        <option value="">كل الأقسام</option>
+        <option value="PTG">PTG</option>
+        <option value="EAS">EAS</option>
+        <option value="RMAS">RMAS</option>
+        <option value="RAS">RAS</option>
+        <option value="Packing">التغليف</option>
+      </select>
+      <select id="filterStatus">
+        <option value="">كل الحالات</option>
+        <option value="مفتوحة">مفتوحة</option>
+        <option value="قيد المعالجة">قيد المعالجة</option>
+        <option value="مغلقة">مغلقة</option>
+      </select>
+    </div>
+    <div id="recordsContainer">
+      <div class="empty"><p>جاري تحميل السجلات...</p></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ============================================================
+     Composer (bottom bar) — يظهر فقط بتبويب المحادثة
+     ============================================================ -->
+<div id="composer">
+  <div class="composer-photo-preview" id="composerPhotoPreview">
+    <img id="composerPhotoImg" alt="معاينة الصورة">
+    <button type="button" id="composerPhotoRemove">إزالة الصورة</button>
+  </div>
+
+  <div class="quick-fields-hint" id="quickFieldsHint">وضع تسجيل ملاحظة رسمية — عبّي الحقول واكتب الوصف بالأسفل ثم أرسل</div>
+  <div class="quick-fields-row" id="quickFieldsRow">
+    <select id="quickDept">
+      <option value="" disabled selected>القسم</option>
+      <option value="PTG">PTG</option>
+      <option value="EAS">EAS</option>
+      <option value="RMAS">RMAS</option>
+      <option value="RAS">RAS</option>
+      <option value="Packing">التغليف</option>
+    </select>
+    <input type="text" id="quickJobOrder" inputmode="numeric" placeholder="رقم أمر الشغل">
+    <select id="quickIssueType">
+      <option value="" disabled selected>نوع المشكلة</option>
+      <option>مادة</option>
+      <option>عملية</option>
+      <option>تصميم</option>
+      <option>بشري</option>
+    </select>
+  </div>
+
+  <div class="composer-main-row">
+    <button type="button" id="logToggleBtn" class="pill-btn" title="تسجيل ملاحظة رسمية">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l7 4v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+      <span>ملاحظة</span>
+    </button>
+    <label class="icon-btn" for="composerPhotoInput" title="التقط صورة">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.3"/></svg>
+    </label>
+    <input type="file" id="composerPhotoInput" accept="image/*" capture="environment" style="display:none;">
+    <textarea id="composerText" rows="1" placeholder="اكتب رسالتك هنا..."></textarea>
+    <button type="button" id="sendBtn" aria-label="إرسال">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="imgModal">
+  <button class="close" id="imgModalClose">✕</button>
+  <img id="imgModalImg" src="" alt="صورة الملاحظة">
+</div>
+
+<div class="modal-overlay" id="addNameModal">
+  <div class="modal-box">
+    <h3>إضافة اسم جديد</h3>
+    <p class="sub">الاسم رح ينحفظ ويظهر تلقائياً لكل أعضاء الفريق بعد الآن.</p>
+    <input type="text" id="newNameInput" placeholder="اكتب الاسم الكامل">
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="newNameCancel">إلغاء</button>
+      <button type="button" class="confirm" id="newNameConfirm">إضافة وحفظ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   1) إعدادات Firebase
+   ---------------------------------------------------------------------
+   عوّض القيم أدناه ببيانات مشروعك الخاص من Firebase Console:
+   Project Settings → General → Your apps → Firebase SDK snippet → Config
+   ثم فعّل من لوحة Firebase: Firestore Database + Storage.
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCUkvvq8NGUg06TZsNVzevspnUo3CKWPiQ",
+  authDomain: "quality-in-process.firebaseapp.com",
+  projectId: "quality-in-process",
+  storageBucket: "quality-in-process.firebasestorage.app",
+  messagingSenderId: "855617296501",
+  appId: "1:855617296501:web:e7b2c2c643934f440b803c"
+};
+
+const OBS_COLLECTION   = "p2h3_observations";
+const NAMES_COLLECTION = "p2h3_names";
+const CHAT_COLLECTION  = "p2h3_chat";
+const IDENTITY_KEY     = "p2h3_identity";
+
+let db = null, firebaseReady = false;
+try {
+  if (!firebaseConfig.apiKey.includes("ضع_")) {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firebaseReady = true;
+  }
+} catch (e) {
+  console.error("Firebase init error:", e);
+}
+if (!firebaseReady) {
+  document.getElementById("configWarning").style.display = "block";
+}
+
+/* =====================================================================
+   2) التنقل بين التبويبين
+   ===================================================================== */
+const tabChatBtn = document.getElementById("tabChatBtn");
+const tabListBtn = document.getElementById("tabListBtn");
+const viewChat   = document.getElementById("viewChat");
+const viewList   = document.getElementById("viewList");
+const composer   = document.getElementById("composer");
+
+tabChatBtn.addEventListener("click", () => switchTab("chat"));
+tabListBtn.addEventListener("click", () => switchTab("list"));
+
+function switchTab(name){
+  tabChatBtn.classList.toggle("active", name === "chat");
+  tabListBtn.classList.toggle("active", name === "list");
+  viewChat.classList.toggle("active", name === "chat");
+  viewList.classList.toggle("active", name === "list");
+  composer.classList.toggle("show", name === "chat");
+  if (name === "chat") {
+    setTimeout(() => {
+      const wrap = document.getElementById("feedWrap");
+      wrap.scrollTop = wrap.scrollHeight;
+      window.scrollTo(0, document.body.scrollHeight);
+    }, 50);
+  }
+}
+switchTab("chat");
+
+/* =====================================================================
+   3) قائمة الأسماء الديناميكية (الأساسية + المُضافة يدوياً)
+   ===================================================================== */
+const BASE_NAMES = [
+  "محمد أبو رشتة",
+  "يوسف كتكت",
+  "موسى حسن",
+  "عمر النعامي",
+  "موسى العميري",
+  "مهند العاصي",
+  "إياد المساعيد"
+];
+
+let customNames = [];
+let allNames = [...BASE_NAMES];
+
+const chatIdentitySel = document.getElementById("chatIdentity");
+const nameSelects = [chatIdentitySel];
+
+const addNameModal   = document.getElementById("addNameModal");
+const newNameInput   = document.getElementById("newNameInput");
+const newNameCancel  = document.getElementById("newNameCancel");
+const newNameConfirm = document.getElementById("newNameConfirm");
+
+let pendingSelect = null;
+let pendingNameToSelect = null;
+
+function renderNameOptions(){
+  const optionsHtml = allNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+  const addOptHtml  = `<option value="__add_new__">➕ إضافة اسم جديد</option>`;
+
+  nameSelects.forEach(sel => {
+    const current = sel.value;
+    const placeholder = sel.dataset.placeholder || "";
+    const placeholderHtml = placeholder
+      ? `<option value="" disabled ${!current ? "selected" : ""}>${placeholder}</option>`
+      : "";
+    sel.innerHTML = placeholderHtml + optionsHtml + addOptHtml;
+    if (current && allNames.includes(current)) sel.value = current;
+  });
+
+  if (pendingNameToSelect && pendingSelect) {
+    pendingSelect.value = pendingNameToSelect;
+    pendingSelect.dataset.lastValue = pendingNameToSelect;
+    pendingNameToSelect = null;
+    pendingSelect = null;
+  }
+
+  const savedIdentity = localStorage.getItem(IDENTITY_KEY);
+  if (savedIdentity && allNames.includes(savedIdentity) && !chatIdentitySel.dataset.restored) {
+    chatIdentitySel.value = savedIdentity;
+    chatIdentitySel.dataset.restored = "1";
+    rebuildFeed();
+  }
+}
+
+function handleNameSelectChange(e){
+  const sel = e.target;
+  if (sel.value === "__add_new__") {
+    pendingSelect = sel;
+    sel.value = sel.dataset.lastValue || "";
+    newNameInput.value = "";
+    addNameModal.classList.add("show");
+    setTimeout(() => newNameInput.focus(), 150);
+  } else {
+    sel.dataset.lastValue = sel.value;
+    if (sel === chatIdentitySel) {
+      localStorage.setItem(IDENTITY_KEY, sel.value);
+      rebuildFeed();
+    }
+  }
+}
+nameSelects.forEach(sel => sel.addEventListener("change", handleNameSelectChange));
+
+newNameCancel.addEventListener("click", () => {
+  addNameModal.classList.remove("show");
+  pendingSelect = null;
+});
+
+newNameConfirm.addEventListener("click", async () => {
+  const name = newNameInput.value.trim();
+  if (!name) { showToast("اكتب الاسم أولاً", "err"); return; }
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+
+  newNameConfirm.disabled = true;
+  try {
+    await db.collection(NAMES_COLLECTION).doc(name).set({
+      name,
+      addedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    pendingNameToSelect = name;
+    addNameModal.classList.remove("show");
+    showToast("تمت إضافة الاسم بنجاح", "ok");
+
+    if (pendingSelect === chatIdentitySel) {
+      localStorage.setItem(IDENTITY_KEY, name);
+      chatIdentitySel.dataset.restored = "1";
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر حفظ الاسم، تحقق من الاتصال", "err");
+  } finally {
+    newNameConfirm.disabled = false;
+  }
+});
+
+if (firebaseReady) {
+  db.collection(NAMES_COLLECTION).orderBy("addedAt", "asc").onSnapshot((snapshot) => {
+    customNames = snapshot.docs.map(d => d.data().name).filter(n => n && !BASE_NAMES.includes(n));
+    allNames = [...BASE_NAMES, ...customNames];
+    renderNameOptions();
+  }, (err) => { console.error(err); renderNameOptions(); });
+} else {
+  renderNameOptions();
+}
+
+/* =====================================================================
+   4) التقاط الصورة وضغطها، وتحويلها لنص (Base64) يُخزَّن مباشرة
+      داخل مستند Firestore نفسه — بدون أي رفع لخدمة تخزين خارجية،
+      عشان يضل المشروع بالكامل على الخطة المجانية Spark بدون بطاقة ائتمان.
+      الحد الأقصى لحجم أي مستند بـ Firestore هو 1 ميغابايت، فبنضغط
+      الصورة لتضل ضمن هامش أمان مريح (أقل من ~900 كيلوبايت).
+   ===================================================================== */
+const composerPhotoInput   = document.getElementById("composerPhotoInput");
+const composerPhotoPreview = document.getElementById("composerPhotoPreview");
+const composerPhotoImg     = document.getElementById("composerPhotoImg");
+const composerPhotoRemove  = document.getElementById("composerPhotoRemove");
+let photoDataUrl = "";
+
+composerPhotoInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    photoDataUrl = await processPhotoFile(file);
+    composerPhotoImg.src = photoDataUrl;
+    composerPhotoPreview.classList.add("show");
+  } catch (err) {
+    console.error(err);
+    if (err && err.message === "too_large") {
+      showToast("الصورة كبيرة جداً حتى بعد الضغط، جرب صورة أخرى", "err");
+    } else {
+      showToast("تعذّر معالجة الصورة، حاول مرة أخرى", "err");
+    }
+  }
+});
+
+composerPhotoRemove.addEventListener("click", () => {
+  photoDataUrl = "";
+  composerPhotoInput.value = "";
+  composerPhotoPreview.classList.remove("show");
+});
+
+function compressImageToDataURL(file, maxSize, quality){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxSize) {
+        height = Math.round(height * (maxSize / width));
+        width = maxSize;
+      } else if (height > maxSize) {
+        width = Math.round(width * (maxSize / height));
+        height = maxSize;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function processPhotoFile(file){
+  let dataUrl = await compressImageToDataURL(file, 900, 0.65);
+  if (dataUrl.length > 700000) {
+    dataUrl = await compressImageToDataURL(file, 700, 0.5);
+  }
+  if (dataUrl.length > 900000) {
+    throw new Error("too_large");
+  }
+  return dataUrl;
+}
+
+/* =====================================================================
+   5) وضع "تسجيل ملاحظة" داخل شريط الكتابة
+   ===================================================================== */
+const logToggleBtn   = document.getElementById("logToggleBtn");
+const quickFieldsRow = document.getElementById("quickFieldsRow");
+const quickFieldsHint= document.getElementById("quickFieldsHint");
+const quickDept      = document.getElementById("quickDept");
+const quickJobOrder  = document.getElementById("quickJobOrder");
+const quickIssueType = document.getElementById("quickIssueType");
+const composerText   = document.getElementById("composerText");
+const sendBtn        = document.getElementById("sendBtn");
+
+let logMode = false;
+
+logToggleBtn.addEventListener("click", () => setLogMode(!logMode));
+
+function setLogMode(on){
+  logMode = on;
+  logToggleBtn.classList.toggle("active", on);
+  quickFieldsRow.classList.toggle("show", on);
+  quickFieldsHint.style.display = on ? "block" : "none";
+  sendBtn.classList.toggle("log-mode", on);
+  composerText.placeholder = on ? "اكتب وصف الملاحظة بشكل واضح..." : "اكتب رسالتك هنا...";
+}
+setLogMode(false);
+
+composerText.addEventListener("input", () => {
+  composerText.style.height = "auto";
+  composerText.style.height = Math.min(composerText.scrollHeight, 90) + "px";
+});
+composerText.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+});
+sendBtn.addEventListener("click", handleSend);
+
+function generateRecordId(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `P2H3-${y}${m}${d}-${rand}`;
+}
+
+function clearComposer(){
+  composerText.value = "";
+  composerText.style.height = "auto";
+  photoDataUrl = "";
+  composerPhotoInput.value = "";
+  composerPhotoPreview.classList.remove("show");
+}
+
+async function handleSend(){
+  const identity = chatIdentitySel.value;
+  if (!identity) { showToast("اختر اسمك أولاً من الأعلى", "err"); return; }
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+
+  if (logMode) {
+    const dept = quickDept.value;
+    const jobOrder = quickJobOrder.value.trim();
+    const issueType = quickIssueType.value;
+    const description = composerText.value.trim();
+
+    if (!dept || !jobOrder || !issueType || !description) {
+      showToast("عبّي القسم ونوع المشكلة ورقم أمر الشغل والوصف", "err");
+      return;
+    }
+
+    sendBtn.disabled = true;
+    try {
+      const recordId = generateRecordId();
+      await db.collection(OBS_COLLECTION).add({
+        recordId,
+        reporterName: identity,
+        dept, jobOrder, issueType, description,
+        downtime: 0,
+        action: "",
+        owner: "",
+        status: "مفتوحة",
+        photoUrl: photoDataUrl || "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showToast(`تم حفظ الملاحظة برقم ${recordId}`, "ok");
+      quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = "";
+      clearComposer();
+      setLogMode(false);
+    } catch (err) {
+      console.error(err);
+      showToast("حدث خطأ أثناء الحفظ، تأكد من الاتصال وحاول مرة أخرى", "err");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  } else {
+    const text = composerText.value.trim();
+    if (!text && !photoDataUrl) return;
+
+    sendBtn.disabled = true;
+    try {
+      await db.collection(CHAT_COLLECTION).add({
+        sender: identity,
+        text,
+        photoUrl: photoDataUrl || "",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      clearComposer();
+    } catch (err) {
+      console.error(err);
+      showToast("تعذّر إرسال الرسالة، تحقق من الاتصال", "err");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+}
+
+/* =====================================================================
+   6) القائمة الموحّدة (رسائل حرة + بطاقات ملاحظات رسمية) بترتيب زمني واحد
+   ===================================================================== */
+const chatMessagesEl = document.getElementById("chatMessages");
+let chatMsgs = [];
+let obsMsgs  = [];
+let allRecords = []; // نفس بيانات الملاحظات، تُستخدم أيضاً بتبويب السجلات
+
+function tsOf(m){ return (m.createdAt && m.createdAt.toMillis) ? m.createdAt.toMillis() : Date.now(); }
+
+function rebuildFeed(){
+  const merged = [
+    ...chatMsgs.map(m => ({ ...m, _kind: "chat" })),
+    ...obsMsgs.map(m => ({ ...m, _kind: "observation" })),
+  ];
+  merged.sort((a, b) => tsOf(a) - tsOf(b));
+  renderFeed(merged);
+}
+
+if (firebaseReady) {
+  db.collection(CHAT_COLLECTION).orderBy("createdAt", "desc").limit(200).onSnapshot((snap) => {
+    chatMsgs = snap.docs.map(d => d.data());
+    rebuildFeed();
+  }, (err) => console.error(err));
+
+  db.collection(OBS_COLLECTION).orderBy("createdAt", "desc").limit(200).onSnapshot((snap) => {
+    obsMsgs = snap.docs.map(d => d.data());
+    allRecords = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    rebuildFeed();
+    renderRecords();
+  }, (err) => console.error(err));
+}
+
+function formatTime(date){
+  if (!date) return "";
+  let h = date.getHours(), m = date.getMinutes();
+  const ampm = h >= 12 ? "م" : "ص";
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+function statusBadgeClass(status){
+  if (status === "مغلقة") return "closed";
+  if (status === "قيد المعالجة") return "wip";
+  return "open";
+}
+
+function renderFeed(list){
+  if (list.length === 0) {
+    chatMessagesEl.innerHTML = `<div class="empty"><p>لا توجد رسائل بعد، ابدأ المحادثة أو سجّل أول ملاحظة</p></div>`;
+    return;
+  }
+  const identity = chatIdentitySel.value;
+
+  chatMessagesEl.innerHTML = list.map(m => {
+    const time = (m.createdAt && m.createdAt.toDate) ? formatTime(m.createdAt.toDate()) : "";
+
+    if (m._kind === "observation") {
+      return `
+        <div class="obs-card">
+          <div class="obs-top">
+            <span class="obs-tag">📋 ملاحظة رسمية</span>
+            <span class="badge ${statusBadgeClass(m.status)}">${m.status}</span>
+          </div>
+          <div class="obs-id">${m.recordId || ""}</div>
+          <div class="obs-dept">${m.dept} — أمر شغل ${escapeHtml(m.jobOrder)} · ${m.issueType}</div>
+          <div class="obs-desc">${escapeHtml(m.description)}</div>
+          ${m.photoUrl ? `<img class="obs-photo" src="${m.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${m.photoUrl}')">` : ""}
+          <div class="obs-meta">${escapeHtml(m.reporterName)} · ${time}</div>
+        </div>`;
+    }
+
+    const mine = identity && m.sender === identity;
+    return `
+      <div class="msg-row ${mine ? "mine" : "theirs"}">
+        <div class="bubble">
+          ${!mine ? `<span class="sender">${escapeHtml(m.sender)}</span>` : ""}
+          ${m.photoUrl ? `<img class="chat-photo" src="${m.photoUrl}" alt="صورة" onclick="openImage('${m.photoUrl}')">` : ""}
+          ${m.text ? `<span class="text">${escapeHtml(m.text)}</span>` : ""}
+          <span class="time">${time}</span>
+        </div>
+      </div>`;
+  }).join("");
+
+  const wrap = document.getElementById("feedWrap");
+  wrap.scrollTop = wrap.scrollHeight;
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+function escapeHtml(str){
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+/* =====================================================================
+   7) تبويب السجلات (فلترة وعرض — كما كان بدون تغيير بالمنطق)
+   ===================================================================== */
+const recordsContainer = document.getElementById("recordsContainer");
+const filterDept   = document.getElementById("filterDept");
+const filterStatus = document.getElementById("filterStatus");
+
+filterDept.addEventListener("change", renderRecords);
+filterStatus.addEventListener("change", renderRecords);
+
+function renderRecords(){
+  let list = allRecords;
+  const d = filterDept.value, s = filterStatus.value;
+  if (d) list = list.filter(r => r.dept === d);
+  if (s) list = list.filter(r => r.status === s);
+
+  if (list.length === 0) {
+    recordsContainer.innerHTML = `
+      <div class="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6M9 16h6M9 8h6M5 4h14v16l-4-3-3 3-3-3-4 3z"/></svg>
+        <p>لا توجد سجلات مطابقة حالياً</p>
+      </div>`;
+    return;
+  }
+
+  recordsContainer.innerHTML = list.map(r => `
+    <div class="rec-card">
+      ${r.photoUrl
+        ? `<img class="rec-thumb" src="${r.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${r.photoUrl}')">`
+        : `<div class="rec-thumb"></div>`}
+      <div class="rec-body">
+        <div class="rec-top">
+          <span class="rec-id">${r.recordId || ""}</span>
+          <span class="badge ${statusBadgeClass(r.status)}">${r.status}</span>
+        </div>
+        <div class="rec-dept">${r.dept} — أمر شغل ${escapeHtml(r.jobOrder)}</div>
+        <div class="rec-desc">${escapeHtml(r.description)}</div>
+        <div class="rec-meta">
+          <span>النوع: ${r.issueType}</span>
+          ${r.downtime ? `<span>الركود: ${r.downtime} س</span>` : ""}
+          ${r.owner ? `<span>المسؤول: ${r.owner}</span>` : ""}
+          <span>المسجّل: ${r.reporterName}</span>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+/* =====================================================================
+   8) نافذة تكبير الصورة
+   ===================================================================== */
+const imgModal = document.getElementById("imgModal");
+const imgModalImg = document.getElementById("imgModalImg");
+document.getElementById("imgModalClose").addEventListener("click", () => imgModal.classList.remove("show"));
+imgModal.addEventListener("click", (e) => { if (e.target === imgModal) imgModal.classList.remove("show"); });
+
+function openImage(url){
+  imgModalImg.src = url;
+  imgModal.classList.add("show");
+}
+
+/* =====================================================================
+   9) رسائل التنبيه (Toast)
+   ===================================================================== */
+let toastTimer = null;
+function showToast(msg, type){
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.className = "show" + (type ? " " + type : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.className = ""; }, 3200);
+}
+</script>
+
+</body>
+</html>
