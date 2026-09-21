@@ -78,15 +78,6 @@
   .view{ display:none; }
   .view.active{ display:block; }
 
-  /* ===== Chat identity bar ===== */
-  #chatIdentityBar{
-    display:flex; align-items:center; gap:10px;
-    background:#fff; border:1px solid var(--line); border-radius:12px;
-    padding:10px 12px; margin-bottom:12px;
-  }
-  #chatIdentityBar label{ margin:0; font-size:13px; font-weight:700; color:var(--navy); white-space:nowrap; }
-  #chatIdentityBar select{ flex:1; padding:8px 10px; font-size:13.5px; border:1.5px solid var(--line); border-radius:9px; direction:rtl; font-family:inherit; }
-
   .config-warning{
     background:#FBEED9; border:1px solid #EFCB8C; color:#7A5316;
     border-radius:12px; padding:14px; font-size:13px; line-height:1.6; margin-bottom:14px;
@@ -137,6 +128,16 @@
     display:none;
   }
   #composer.show{ display:block; }
+
+  #composerIdentityChip{
+    display:flex; align-items:center; justify-content:space-between; width:100%;
+    background:#EEF3F5; border:none; border-bottom:1px solid var(--line);
+    padding:9px 14px; font-family:inherit; font-size:12.5px; font-weight:700;
+    color:var(--navy); cursor:pointer; text-align:right;
+  }
+  #composerIdentityChip.empty{ background:#FBEED9; color:var(--amber-dark); }
+  #composerIdentityChip .edit-hint{ font-size:11px; font-weight:700; color:var(--teal); }
+  #composerIdentityChip.empty .edit-hint{ color:var(--amber-dark); }
 
   .composer-photo-preview{ display:none; align-items:center; gap:10px; padding:10px 14px 0; }
   .composer-photo-preview.show{ display:flex; }
@@ -312,11 +313,6 @@
       <b>firebaseConfig</b> في نهاية الصفحة، وضع فيه بيانات مشروعك على Firebase.
     </div>
 
-    <div id="chatIdentityBar">
-      <label for="chatIdentity">أنت:</label>
-      <select id="chatIdentity" data-placeholder="اختر اسمك"></select>
-    </div>
-
     <div id="feedWrap">
       <div id="chatMessages">
         <div class="empty"><p>لا توجد رسائل بعد، ابدأ المحادثة أو سجّل أول ملاحظة</p></div>
@@ -420,6 +416,11 @@
      Composer (bottom bar) — يظهر فقط بتبويب المحادثة
      ============================================================ -->
 <div id="composer">
+  <button type="button" id="composerIdentityChip">
+    <span id="composerIdentityLabel">اختر اسمك</span>
+    <span class="edit-hint">تغيير</span>
+  </button>
+
   <div class="composer-photo-preview" id="composerPhotoPreview">
     <img id="composerPhotoImg" alt="معاينة الصورة">
     <button type="button" id="composerPhotoRemove">إزالة الصورة</button>
@@ -477,6 +478,29 @@
     <div class="modal-actions">
       <button type="button" class="cancel" id="newNameCancel">إلغاء</button>
       <button type="button" class="confirm" id="newNameConfirm">إضافة وحفظ</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="identityModal">
+  <div class="modal-box">
+    <h3>مين معك؟</h3>
+    <p class="sub">اختر اسمك عشان تنعرف رسائلك وملاحظاتك. بينحفظ على هالجهاز وما رح يطلبه منك تاني.</p>
+    <select id="chatIdentity" data-placeholder="اختر اسمك"></select>
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="identityModalCancel">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="adminPasswordModal">
+  <div class="modal-box">
+    <h3>كلمة سر الحذف</h3>
+    <p class="sub">حذف الملاحظات محمي بكلمة سر — اكتبها للمتابعة.</p>
+    <input type="password" id="adminPasswordInput" placeholder="كلمة السر">
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="adminPasswordCancel">إلغاء</button>
+      <button type="button" class="confirm" id="adminPasswordConfirm">تأكيد</button>
     </div>
   </div>
 </div>
@@ -604,19 +628,45 @@ let chatMsgs = [];
 let obsMsgs  = [];
 
 /* =====================================================================
-   صلاحية الأدمن — فقط الأسماء الموجودة هنا تقدر تحذف ملاحظة.
-   لإضافة أدمن جديد لاحقاً: أضف اسمه هون بالضبط متل ما هو مكتوب بقائمة
-   الأسماء (نفس الحروف تماماً)، وارفع الملف المحدّث مكان القديم.
+   صلاحية الحذف — محمية بكلمة سر واحدة (مش باسم مستخدم قابل للاختيار من
+   قائمة منسدلة). كلمة السر نفسها ما بتنخزن بالملف إطلاقاً، فقط بصمتها
+   (SHA-256). لتغيير كلمة السر لاحقاً:
+     1) افتح الصفحة بالمتصفح، اضغط F12 (أدوات المطوّر) وافتح تبويب Console
+     2) الصق هذا السطر وبدّل YOUR_PASSWORD بكلمة السر الجديدة ثم اضغط Enter:
+        crypto.subtle.digest("SHA-256", new TextEncoder().encode("YOUR_PASSWORD")).then(b=>console.log(Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("")))
+     3) انسخ الناتج (64 حرف) وحطه مكان ADMIN_PASSWORD_HASH بالأسفل، واحفظ وارفع الملف.
    ===================================================================== */
-const ADMIN_NAMES = [
-  "يوسف كتكت"
-];
-function isAdmin(){
-  return ADMIN_NAMES.includes(chatIdentitySel.value);
+const ADMIN_UNLOCK_KEY = "p2h3_admin_unlocked";
+const ADMIN_PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4";
+
+async function sha256Hex(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function isUnlocked(){
+  return sessionStorage.getItem(ADMIN_UNLOCK_KEY) === "1";
 }
 
 const chatIdentitySel = document.getElementById("chatIdentity");
 const nameSelects = [chatIdentitySel];
+
+const identityModal        = document.getElementById("identityModal");
+const identityModalCancel  = document.getElementById("identityModalCancel");
+const composerIdentityChip = document.getElementById("composerIdentityChip");
+const composerIdentityLabel= document.getElementById("composerIdentityLabel");
+
+function openIdentityModal(){ identityModal.classList.add("show"); }
+function updateIdentityChip(){
+  if (chatIdentitySel.value) {
+    composerIdentityLabel.textContent = `أنت: ${chatIdentitySel.value}`;
+    composerIdentityChip.classList.remove("empty");
+  } else {
+    composerIdentityLabel.textContent = "اختر اسمك (اضغط هون)";
+    composerIdentityChip.classList.add("empty");
+  }
+}
+composerIdentityChip.addEventListener("click", openIdentityModal);
+identityModalCancel.addEventListener("click", () => identityModal.classList.remove("show"));
 
 const addNameModal   = document.getElementById("addNameModal");
 const newNameInput   = document.getElementById("newNameInput");
@@ -654,6 +704,12 @@ function renderNameOptions(){
     rebuildFeed();
     renderRecords();
   }
+
+  updateIdentityChip();
+  if (!chatIdentitySel.value && !chatIdentitySel.dataset.autoPrompted) {
+    chatIdentitySel.dataset.autoPrompted = "1";
+    openIdentityModal();
+  }
 }
 
 function handleNameSelectChange(e){
@@ -668,6 +724,8 @@ function handleNameSelectChange(e){
     sel.dataset.lastValue = sel.value;
     if (sel === chatIdentitySel) {
       localStorage.setItem(IDENTITY_KEY, sel.value);
+      updateIdentityChip();
+      identityModal.classList.remove("show");
       rebuildFeed();
       renderRecords();
     }
@@ -699,6 +757,7 @@ newNameConfirm.addEventListener("click", async () => {
     if (pendingSelect === chatIdentitySel) {
       localStorage.setItem(IDENTITY_KEY, name);
       chatIdentitySel.dataset.restored = "1";
+      identityModal.classList.remove("show");
     }
   } catch (err) {
     console.error(err);
@@ -845,7 +904,7 @@ function clearComposer(){
 
 async function handleSend(){
   const identity = chatIdentitySel.value;
-  if (!identity) { showToast("اختر اسمك أولاً من الأعلى", "err"); return; }
+  if (!identity) { showToast("اختر اسمك أولاً", "err"); openIdentityModal(); return; }
   if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
 
   if (logMode) {
@@ -928,11 +987,18 @@ if (firebaseReady) {
     rebuildFeed();
   }, (err) => console.error(err));
 
+  // فيد المحادثة: يكفي آخر 200 ملاحظة لعرضها بشكل سريع ضمن المحادثة
   db.collection(OBS_COLLECTION).orderBy("createdAt", "desc").limit(200).onSnapshot((snap) => {
     obsMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    allRecords = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     rebuildFeed();
+  }, (err) => console.error(err));
+
+  // السجل الكامل (بدون حد أقصى): مصدر تبويب "السجلات" و"التحليل" و"تصدير Excel"
+  // — لازم يبقى كامل حتى لو تجاوز عدد الملاحظات 200 عشان ما تضيع سجلات من التحليل الشهري
+  db.collection(OBS_COLLECTION).orderBy("createdAt", "desc").onSnapshot((snap) => {
+    allRecords = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderRecords();
+    if (viewAnalysis.classList.contains("active")) renderAnalysisSummary();
   }, (err) => console.error(err));
 }
 
@@ -972,7 +1038,7 @@ function renderFeed(list){
           <div class="obs-desc">${escapeHtml(m.description)}</div>
           ${m.photoUrl ? `<img class="obs-photo" src="${m.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${m.photoUrl}')">` : ""}
           <div class="obs-meta">${escapeHtml(m.reporterName)} · ${time}</div>
-          ${isAdmin() ? `<button type="button" class="obs-delete-btn" onclick="deleteRecord('${m.id}')">🗑️ حذف الملاحظة</button>` : ""}
+          <button type="button" class="obs-delete-btn" onclick="requestDelete('${m.id}')">🗑️ حذف الملاحظة</button>
         </div>`;
     }
 
@@ -1045,15 +1111,50 @@ function renderRecords(){
         </div>
         <div class="rec-actions">
           <button type="button" class="rec-edit-btn" onclick="openEditRecord('${r.id}')">✏️ تحديث / تسكير الملاحظة</button>
-          ${isAdmin() ? `<button type="button" class="rec-delete-btn" onclick="deleteRecord('${r.id}')">🗑️ حذف</button>` : ""}
+          <button type="button" class="rec-delete-btn" onclick="requestDelete('${r.id}')">🗑️ حذف</button>
         </div>
       </div>
     </div>
   `).join("");
 }
 
+let pendingDeleteId = null;
+const adminPasswordModal   = document.getElementById("adminPasswordModal");
+const adminPasswordInput   = document.getElementById("adminPasswordInput");
+const adminPasswordCancel  = document.getElementById("adminPasswordCancel");
+const adminPasswordConfirm = document.getElementById("adminPasswordConfirm");
+
+function requestDelete(id){
+  if (isUnlocked()) { deleteRecord(id); return; }
+  pendingDeleteId = id;
+  adminPasswordInput.value = "";
+  adminPasswordModal.classList.add("show");
+  setTimeout(() => adminPasswordInput.focus(), 150);
+}
+
+adminPasswordCancel.addEventListener("click", () => {
+  adminPasswordModal.classList.remove("show");
+  pendingDeleteId = null;
+});
+adminPasswordInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); adminPasswordConfirm.click(); }
+});
+adminPasswordConfirm.addEventListener("click", async () => {
+  const entered = adminPasswordInput.value;
+  if (!entered) { showToast("اكتب كلمة السر", "err"); return; }
+  const hash = await sha256Hex(entered);
+  if (hash !== ADMIN_PASSWORD_HASH) {
+    showToast("كلمة السر غير صحيحة", "err");
+    return;
+  }
+  sessionStorage.setItem(ADMIN_UNLOCK_KEY, "1");
+  adminPasswordModal.classList.remove("show");
+  const id = pendingDeleteId;
+  pendingDeleteId = null;
+  if (id) deleteRecord(id);
+});
+
 async function deleteRecord(id){
-  if (!isAdmin()) return;
   if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
   const record = allRecords.find(r => r.id === id) || obsMsgs.find(r => r.id === id);
   const label = record ? (record.recordId || "") : "";
