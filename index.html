@@ -14,7 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
 <style>
   :root{
@@ -377,6 +377,10 @@
 
     <div id="analysisContent">
       <div id="statGrid" class="stat-grid"></div>
+
+      <div id="chartsUnavailableNotice" class="config-warning" style="display:none;">
+        تعذّر تحميل مكتبة الرسوم البيانية — تأكد من اتصال الإنترنت عندك وأعد فتح الصفحة. باقي الأرقام والتصدير لملف Excel شغالين طبيعي.
+      </div>
 
       <div class="card">
         <div class="section-title">عدد الملاحظات حسب القسم</div>
@@ -1140,14 +1144,13 @@ function renderOrUpdateChart(canvasId, config){
   if (typeof Chart === "undefined") return;
   const existing = chartInstances[canvasId];
   if (existing) {
-    // نحدّث الرسم القائم بمكانه بدل هدمه وإعادة بنائه — أكثر استقراراً
-    // ويتجنّب أي وميض أو خلل بصري عابر عند تبديل الفترة بسرعة
-    existing.data.labels = config.data.labels;
-    existing.data.datasets = config.data.datasets;
-    existing.update();
-    return;
+    existing.destroy();
+    delete chartInstances[canvasId];
   }
-  const ctx = document.getElementById(canvasId).getContext("2d");
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  // تفريغ الكانفاس يدوياً قبل الرسم من جديد — يمنع أي بقايا رسم قديم عالكانفاس
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   chartInstances[canvasId] = new Chart(ctx, config);
 }
 
@@ -1204,6 +1207,12 @@ function renderAnalysisSummary(){
   }
   analysisEmpty.style.display = "none";
   analysisContent.style.display = "block";
+
+  const chartsOk = typeof Chart !== "undefined";
+  document.getElementById("chartsUnavailableNotice").style.display = chartsOk ? "none" : "block";
+  document.querySelectorAll(".chart-wrap").forEach(el => {
+    el.closest(".card").style.display = chartsOk ? "block" : "none";
+  });
 
   const totalDowntime = list.reduce((sum, r) => sum + (parseFloat(r.downtime) || 0), 0);
   const byDept        = countBy(list, "dept");
