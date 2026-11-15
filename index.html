@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>سجل ملاحظات الإنتاج — هنجر P2-H3</title>
+<title>سجل ملاحظات الإنتاج — Quality Team in Electrical Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -13,7 +13,8 @@
      ============================================================ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ExcelJS: بيسمح بإدراج الصور داخل ملف Excel وتنسيق الجداول (SheetJS المجاني ما بيدعم الصور) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
 <style>
@@ -286,13 +287,60 @@
   .modal-actions button{ flex:1; padding:12px; border-radius:10px; border:none; font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; }
   .modal-actions .cancel{ background:#EEF2F4; color:var(--muted); }
   .modal-actions .confirm{ background:var(--deep); color:#fff; }
+
+  /* ===== Header settings button ===== */
+  header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .header-text{ min-width:0; }
+  #settingsBtn{
+    background:rgba(255,255,255,.12); color:#fff; border:none; border-radius:10px;
+    padding:8px 12px; font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; flex-shrink:0;
+  }
+
+  /* ===== Team / lists management modal ===== */
+  .modal-box.wide{ max-width:440px; max-height:88vh; overflow-y:auto; }
+  .seg{ display:flex; background:#EEF3F5; border-radius:10px; padding:3px; margin-bottom:12px; }
+  .seg button{ flex:1; border:none; background:transparent; padding:8px 4px; border-radius:8px; font-family:inherit; font-weight:700; font-size:13px; color:var(--muted); cursor:pointer; }
+  .seg button.active{ background:#fff; color:var(--navy); box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .list-items{ border:1px solid var(--line); border-radius:10px; margin-bottom:12px; max-height:46vh; overflow-y:auto; }
+  .list-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line); font-size:14px; }
+  .list-item:last-child{ border-bottom:none; }
+  .list-item button{ background:#FBE8E4; color:var(--danger); border:none; border-radius:8px; padding:5px 10px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+  .list-item.removed{ color:var(--muted); }
+  .list-item.removed span{ text-decoration:line-through; }
+  .list-item.removed button{ background:#E1F2E8; color:var(--ok); }
+  .add-row{ display:flex; gap:8px; }
+  .add-row input{ flex:1; margin-bottom:0 !important; }
+  .add-row button{ background:var(--deep); color:#fff; border:none; border-radius:10px; padding:0 16px; font-family:inherit; font-weight:700; cursor:pointer; }
+
+  /* ===== Pinned unit (same unit, multiple observations) ===== */
+  #pinnedUnit{
+    display:none; align-items:center; justify-content:space-between; gap:8px;
+    margin:10px 14px 0; padding:8px 12px; border-radius:10px;
+    background:#E7F1F5; color:var(--deep); font-size:12.5px; font-weight:700;
+  }
+  #pinnedUnit.show{ display:flex; }
+  #pinnedUnit button{ background:#fff; border:1px solid var(--line); color:var(--danger); border-radius:8px; padding:4px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0; }
+
+  /* ===== Records extras ===== */
+  .search-box{ width:100%; padding:10px 12px; font-size:14px; border:1.5px solid var(--line); border-radius:10px; font-family:inherit; direction:rtl; margin-bottom:10px; background:#fff; }
+  .unit-badge{ display:inline-block; font-size:11px; font-weight:700; color:var(--deep); background:#E7F1F5; padding:2px 9px; border-radius:20px; cursor:pointer; margin-bottom:5px; }
+  .rec-same-btn{
+    background:#FBEED9; color:var(--amber-dark); border:none; border-radius:8px;
+    padding:5px 10px; font-family:inherit; font-size:11.5px; font-weight:700; cursor:pointer; flex-shrink:0;
+  }
+  .rec-actions{ flex-wrap:wrap; }
+  .rec-count{ font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .aging-row .n.late{ background:#FBE8E4; color:var(--danger); }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>سجل ملاحظات الإنتاج</h1>
-  <p>لجنة الجودة التحسينية — هنجر P2-H3</p>
+  <div class="header-text">
+    <h1>سجل ملاحظات الإنتاج</h1>
+    <p>Quality Team in Electrical Panel</p>
+  </div>
+  <button type="button" id="settingsBtn" title="إدارة الفريق والقوائم">⚙️ الفريق</button>
 </header>
 
 <nav class="tabs">
@@ -325,14 +373,10 @@
        View 2: Records List (كما هي، بدون تعديل على منطقها)
        ============================================================ -->
   <div id="viewList" class="view">
+    <input type="search" id="recordSearch" class="search-box" placeholder="🔍 ابحث برقم أمر الشغل أو S/N أو رقم السجل أو الوصف">
     <div class="filters">
       <select id="filterDept">
         <option value="">كل الأقسام</option>
-        <option value="PTG">PTG</option>
-        <option value="EAS">EAS</option>
-        <option value="RMAS">RMAS</option>
-        <option value="RAS">RAS</option>
-        <option value="Packing">التغليف</option>
       </select>
       <select id="filterStatus">
         <option value="">كل الحالات</option>
@@ -341,6 +385,7 @@
         <option value="مغلقة">مغلقة</option>
       </select>
     </div>
+    <div id="recCount" class="rec-count"></div>
     <div id="recordsContainer">
       <div class="empty"><p>جاري تحميل السجلات...</p></div>
     </div>
@@ -362,8 +407,8 @@
           <input type="date" id="analysisTo">
         </div>
       </div>
-      <button type="button" class="btn-primary" id="exportExcelBtn">📊 تصدير Excel (سجلات + تحليل)</button>
-      <div class="hint" style="margin-top:10px;">الملف بيتكوّن من صفحتين: صفحة فيها كل السجلات بالتفصيل، وصفحة فيها تحليل ملخّص لنفس الفترة.</div>
+      <button type="button" class="btn-primary" id="exportExcelBtn">📊 تصدير تقرير Excel (مع الصور)</button>
+      <div class="hint" style="margin-top:10px;">التقرير فيه: ملخّص بالمؤشرات وأبرز النتائج والرسوم، كل الملاحظات مع صورة كل ملاحظة داخل الملف، تجميع حسب الحبة، قائمة الملاحظات المفتوحة مع عمرها، وتحليل باريتو لأنواع المشاكل.</div>
     </div>
 
     <div id="analysisEmpty" class="empty" style="display:none;">
@@ -374,6 +419,11 @@
     <div id="analysisContent">
       <div id="statGrid" class="stat-grid"></div>
 
+      <div class="card">
+        <div class="section-title">أبرز النتائج</div>
+        <div id="findingsList"></div>
+      </div>
+
       <div id="chartsUnavailableNotice" class="config-warning" style="display:none;">
         تعذّر تحميل مكتبة الرسوم البيانية — تأكد من اتصال الإنترنت عندك وأعد فتح الصفحة. باقي الأرقام والتصدير لملف Excel شغالين طبيعي.
       </div>
@@ -383,7 +433,7 @@
         <div class="chart-wrap"><canvas id="chartByDept"></canvas></div>
       </div>
       <div class="card">
-        <div class="section-title">عدد الملاحظات حسب نوع المشكلة</div>
+        <div class="section-title">باريتو أنواع المشاكل (العدد + النسبة التراكمية)</div>
         <div class="chart-wrap"><canvas id="chartByType"></canvas></div>
       </div>
       <div class="card">
@@ -395,6 +445,14 @@
         <div class="chart-wrap"><canvas id="chartDowntime"></canvas></div>
       </div>
 
+      <div class="card">
+        <div class="section-title">الحبات اللي عليها أكثر من ملاحظة</div>
+        <div id="breakdownUnits"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">ملاحظات مفتوحة — الأقدم أولاً</div>
+        <div id="breakdownAging"></div>
+      </div>
       <div class="card">
         <div class="section-title">حسب القسم</div>
         <div id="breakdownDept"></div>
@@ -426,24 +484,15 @@
     <button type="button" id="composerPhotoRemove">إزالة الصورة</button>
   </div>
 
-  <div class="quick-fields-hint" id="quickFieldsHint">وضع تسجيل ملاحظة رسمية — عبّي الحقول واكتب الوصف بالأسفل ثم أرسل</div>
+  <div class="quick-fields-hint" id="quickFieldsHint">وضع تسجيل ملاحظة رسمية — عبّي الحقول واكتب الوصف بالأسفل ثم أرسل. بعد الإرسال بتضل بيانات الحبة مثبتة عشان تضيف ملاحظة ثانية عليها.</div>
+  <div id="pinnedUnit">
+    <span id="pinnedUnitLabel"></span>
+    <button type="button" id="newUnitBtn">✕ حبة جديدة</button>
+  </div>
   <div class="quick-fields-row" id="quickFieldsRow">
-    <select id="quickDept">
-      <option value="" disabled selected>القسم</option>
-      <option value="PTG">PTG</option>
-      <option value="EAS">EAS</option>
-      <option value="RMAS">RMAS</option>
-      <option value="RAS">RAS</option>
-      <option value="Packing">التغليف</option>
-    </select>
+    <select id="quickDept"></select>
     <input type="text" id="quickJobOrder" inputmode="numeric" placeholder="رقم أمر الشغل">
-    <select id="quickIssueType">
-      <option value="" disabled selected>نوع المشكلة</option>
-      <option>مادة</option>
-      <option>عملية</option>
-      <option>تصميم</option>
-      <option>بشري</option>
-    </select>
+    <select id="quickIssueType"></select>
     <input type="text" id="quickSerial" placeholder="S/N (اختياري)">
   </div>
 
@@ -493,10 +542,30 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box wide">
+    <h3>إدارة الفريق والقوائم</h3>
+    <p class="sub">أي تعديل هون بينحفظ ويظهر لكل أعضاء الفريق فوراً. الإزالة ما بتمسح السجلات القديمة، وبتقدر ترجّع أي اسم بضغطة.</p>
+    <div class="seg" id="settingsSeg">
+      <button type="button" data-list="names" class="active">الأسماء</button>
+      <button type="button" data-list="depts">الأقسام</button>
+      <button type="button" data-list="types">أنواع المشاكل</button>
+    </div>
+    <div class="list-items" id="settingsItems"></div>
+    <div class="add-row">
+      <input type="text" id="settingsNewInput" placeholder="اكتب الاسم الجديد">
+      <button type="button" id="settingsAddBtn">إضافة</button>
+    </div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button type="button" class="cancel" id="settingsClose">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="adminPasswordModal">
   <div class="modal-box">
-    <h3>كلمة سر الحذف</h3>
-    <p class="sub">حذف الملاحظات محمي بكلمة سر — اكتبها للمتابعة.</p>
+    <h3>كلمة سر المسؤول</h3>
+    <p class="sub">الحذف وإدارة الفريق محميين بكلمة سر — اكتبها للمتابعة.</p>
     <input type="password" id="adminPasswordInput" placeholder="كلمة السر">
     <div class="modal-actions">
       <button type="button" class="cancel" id="adminPasswordCancel">إلغاء</button>
@@ -609,7 +678,13 @@ function switchTab(name){
 switchTab("chat");
 
 /* =====================================================================
-   3) قائمة الأسماء الديناميكية (الأساسية + المُضافة يدوياً)
+   3) القوائم القابلة للتعديل: الأسماء + الأقسام + أنواع المشاكل
+   ---------------------------------------------------------------------
+   القيم أدناه هي فقط البداية الافتراضية. أي إضافة أو إزالة بتصير من زر
+   "⚙️ الفريق" بأعلى الصفحة وبتنحفظ على Firebase لكل المستخدمين — ما في
+   داعي تعدّل الكود. (كل القوائم محفوظة بنفس مجموعة الأسماء NAMES_COLLECTION:
+   مستند الاسم معرّفه هو الاسم نفسه، ومستندات الأقسام/الأنواع معرّفها
+   يبدأ بـ __dept__ أو __type__ وفيها حقل kind.)
    ===================================================================== */
 const BASE_NAMES = [
   "محمد أبو رشتة",
@@ -620,12 +695,67 @@ const BASE_NAMES = [
   "مهند العاصي",
   "إياد المساعيد"
 ];
+const BASE_DEPTS = [
+  { value: "PTG",     label: "PTG" },
+  { value: "EAS",     label: "EAS" },
+  { value: "RMAS",    label: "RMAS" },
+  { value: "RAS",     label: "RAS" },
+  { value: "Packing", label: "التغليف" },
+];
+const BASE_TYPES = ["مادة", "عملية", "تصميم", "بشري"];
 
-let customNames = [];
-let allNames = [...BASE_NAMES];
+const RECORD_PREFIX = "EP"; // بادئة رقم السجل للملاحظات الجديدة (القديمة بتضل P2H3-...)
+
+let listDocs = [];                         // مستندات القوائم كما هي من Firebase
+const listState = { names: [], depts: [], types: [] }; // كل عنصر: {value,label,removed}
+let allNames = [...BASE_NAMES];            // الأسماء الفعّالة فقط
+let allDepts = BASE_DEPTS.map(d => ({ ...d }));
+let allTypes = [...BASE_TYPES];
 let allRecords = []; // بيانات الملاحظات — تُستخدم بتبويب السجلات وبتبويب التحليل
 let chatMsgs = [];
 let obsMsgs  = [];
+
+function tsMillis(v){ return (v && v.toMillis) ? v.toMillis() : 0; }
+
+function computeLists(){
+  const docs = listDocs.slice().sort((a, b) => tsMillis(a.addedAt) - tsMillis(b.addedAt));
+  const build = (kind, base) => {
+    const map = new Map(base.map(b => [b.value, { ...b, removed: false }]));
+    docs.filter(d => (d.kind || "name") === kind).forEach(d => {
+      const value = kind === "name" ? d.name : d.value;
+      if (!value) return;
+      const prev = map.get(value);
+      map.set(value, { value, label: (prev && prev.label) || d.label || value, removed: !!d.removed });
+    });
+    return [...map.values()];
+  };
+  listState.names = build("name", BASE_NAMES.map(n => ({ value: n, label: n })));
+  listState.depts = build("dept", BASE_DEPTS);
+  listState.types = build("type", BASE_TYPES.map(t => ({ value: t, label: t })));
+  allNames = listState.names.filter(x => !x.removed).map(x => x.value);
+  allDepts = listState.depts.filter(x => !x.removed).map(x => ({ value: x.value, label: x.label }));
+  allTypes = listState.types.filter(x => !x.removed).map(x => x.value);
+}
+computeLists();
+
+function deptLabel(value){
+  if (!value) return "غير محدد";
+  const d = listState.depts.find(x => x.value === value);
+  return d ? d.label : value;
+}
+
+const KIND_OF_LIST = { names: "name", depts: "dept", types: "type" };
+function listDocId(kind, value){
+  const safe = String(value).replace(/\//g, "∕");
+  return kind === "name" ? safe : `__${kind}__${safe}`;
+}
+async function setListItem(listKey, value, removed){
+  const kind = KIND_OF_LIST[listKey];
+  const id = listDocId(kind, value);
+  const data = kind === "name" ? { name: value, removed } : { kind, value, label: value, removed };
+  if (!listDocs.some(d => d._id === id)) data.addedAt = firebase.firestore.FieldValue.serverTimestamp();
+  await db.collection(NAMES_COLLECTION).doc(id).set(data, { merge: true });
+}
 
 /* =====================================================================
    صلاحية الحذف — محمية بكلمة سر واحدة (مش باسم مستخدم قابل للاختيار من
@@ -710,6 +840,29 @@ function renderNameOptions(){
     chatIdentitySel.dataset.autoPrompted = "1";
     openIdentityModal();
   }
+  renderListSelects();
+}
+
+/* القوائم المنسدلة للأقسام وأنواع المشاكل (بشريط التسجيل وبفلتر السجلات) */
+function fillSelect(sel, items, placeholderHtml){
+  const current = sel.value;
+  sel.innerHTML = placeholderHtml + items.map(i =>
+    `<option value="${escapeHtml(i.value)}">${escapeHtml(i.label)}</option>`).join("");
+  if (current && items.some(i => i.value === current)) sel.value = current;
+}
+function renderListSelects(){
+  const qd = document.getElementById("quickDept");
+  const qt = document.getElementById("quickIssueType");
+  const fd = document.getElementById("filterDept");
+  fillSelect(qd, allDepts, `<option value="" disabled ${qd.value ? "" : "selected"}>القسم</option>`);
+  fillSelect(qt, allTypes.map(t => ({ value: t, label: t })), `<option value="" disabled ${qt.value ? "" : "selected"}>نوع المشكلة</option>`);
+  // الفلتر بيعرض الأقسام الفعّالة + أي قسم موجود بسجلات قديمة حتى لو انشال من القائمة
+  const filterItems = allDepts.map(d => ({ ...d }));
+  allRecords.forEach(r => {
+    if (r.dept && !filterItems.some(x => x.value === r.dept)) filterItems.push({ value: r.dept, label: deptLabel(r.dept) });
+  });
+  fillSelect(fd, filterItems, `<option value="">كل الأقسام</option>`);
+  if (document.getElementById("settingsModal").classList.contains("show")) renderSettingsItems();
 }
 
 function handleNameSelectChange(e){
@@ -745,10 +898,7 @@ newNameConfirm.addEventListener("click", async () => {
 
   newNameConfirm.disabled = true;
   try {
-    await db.collection(NAMES_COLLECTION).doc(name).set({
-      name,
-      addedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    await setListItem("names", name, false);
 
     pendingNameToSelect = name;
     addNameModal.classList.remove("show");
@@ -768,14 +918,88 @@ newNameConfirm.addEventListener("click", async () => {
 });
 
 if (firebaseReady) {
-  db.collection(NAMES_COLLECTION).orderBy("addedAt", "asc").onSnapshot((snapshot) => {
-    customNames = snapshot.docs.map(d => d.data().name).filter(n => n && !BASE_NAMES.includes(n));
-    allNames = [...BASE_NAMES, ...customNames];
+  db.collection(NAMES_COLLECTION).onSnapshot((snapshot) => {
+    listDocs = snapshot.docs.map(d => ({ _id: d.id, ...d.data() }));
+    computeLists();
     renderNameOptions();
   }, (err) => { console.error(err); renderNameOptions(); });
 } else {
   renderNameOptions();
 }
+
+/* ---- نافذة إدارة الفريق والقوائم (محمية بكلمة سر المسؤول) ---- */
+const settingsModal    = document.getElementById("settingsModal");
+const settingsItems    = document.getElementById("settingsItems");
+const settingsNewInput = document.getElementById("settingsNewInput");
+const settingsAddBtn   = document.getElementById("settingsAddBtn");
+let settingsList = "names";
+const SETTINGS_PLACEHOLDER = { names: "اكتب الاسم الجديد", depts: "اكتب اسم القسم الجديد", types: "اكتب نوع المشكلة الجديد" };
+
+document.getElementById("settingsBtn").addEventListener("click", () => {
+  requestAdmin(() => {
+    renderSettingsItems();
+    settingsModal.classList.add("show");
+  });
+});
+document.getElementById("settingsClose").addEventListener("click", () => settingsModal.classList.remove("show"));
+document.querySelectorAll("#settingsSeg button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    settingsList = btn.dataset.list;
+    document.querySelectorAll("#settingsSeg button").forEach(b => b.classList.toggle("active", b === btn));
+    renderSettingsItems();
+  });
+});
+
+function renderSettingsItems(){
+  settingsNewInput.placeholder = SETTINGS_PLACEHOLDER[settingsList];
+  const items = listState[settingsList];
+  if (!items.length) { settingsItems.innerHTML = `<div class="list-item">القائمة فاضية</div>`; return; }
+  // الفعّالة أولاً ثم المُزالة
+  const sorted = [...items.filter(i => !i.removed), ...items.filter(i => i.removed)];
+  settingsItems.innerHTML = sorted.map(i => `
+    <div class="list-item ${i.removed ? "removed" : ""}">
+      <span>${escapeHtml(i.label)}${i.label !== i.value ? ` <small style="color:var(--muted)">(${escapeHtml(i.value)})</small>` : ""}</span>
+      <button type="button" data-value="${escapeHtml(i.value)}" data-removed="${i.removed ? 1 : 0}">${i.removed ? "↩️ إرجاع" : "✕ إزالة"}</button>
+    </div>`).join("");
+  settingsItems.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => toggleListItem(b.dataset.value, b.dataset.removed !== "1"));
+  });
+}
+
+async function toggleListItem(value, remove){
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+  if (remove && settingsList === "names" && value === chatIdentitySel.value) {
+    if (!confirm("هذا اسمك الحالي على هالجهاز. متأكد إنك بدك تزيله؟")) return;
+  }
+  try {
+    await setListItem(settingsList, value, remove);
+    showToast(remove ? `تمت إزالة "${value}"` : `تم إرجاع "${value}"`, "ok");
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر الحفظ، تحقق من الاتصال", "err");
+  }
+}
+
+async function addSettingsItem(){
+  const value = settingsNewInput.value.trim();
+  if (!value) { showToast("اكتب القيمة أولاً", "err"); return; }
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+  const existing = listState[settingsList].find(i => i.value === value || i.label === value);
+  if (existing && !existing.removed) { showToast("موجود بالقائمة أصلاً", "err"); return; }
+  settingsAddBtn.disabled = true;
+  try {
+    await setListItem(settingsList, existing ? existing.value : value, false);
+    settingsNewInput.value = "";
+    showToast(`تمت إضافة "${value}"`, "ok");
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر الحفظ، تحقق من الاتصال", "err");
+  } finally {
+    settingsAddBtn.disabled = false;
+  }
+}
+settingsAddBtn.addEventListener("click", addSettingsItem);
+settingsNewInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addSettingsItem(); } });
 
 /* =====================================================================
    4) التقاط الصورة وضغطها، وتحويلها لنص (Base64) يُخزَّن مباشرة
@@ -872,7 +1096,66 @@ function setLogMode(on){
   quickFieldsRow.classList.toggle("show", on);
   quickFieldsHint.style.display = on ? "block" : "none";
   sendBtn.classList.toggle("log-mode", on);
-  composerText.placeholder = on ? "اكتب وصف الملاحظة بشكل واضح..." : "اكتب رسالتك هنا...";
+  composerText.placeholder = on
+    ? (unitPinned ? "اكتب وصف الملاحظة التالية على نفس الحبة..." : "اكتب وصف الملاحظة بشكل واضح...")
+    : "اكتب رسالتك هنا...";
+  updatePinnedUnit();
+}
+
+/* ---- تثبيت الحبة: أكثر من ملاحظة على نفس الحبة بدون إعادة تعبئة بياناتها ----
+   الحبة = رقم أمر الشغل + الرقم التسلسلي (S/N). إذا ما في S/N بتنعرف بأمر الشغل لحاله. */
+let unitPinned = false;
+const pinnedUnitEl    = document.getElementById("pinnedUnit");
+const pinnedUnitLabel = document.getElementById("pinnedUnitLabel");
+
+function unitKeyOf(jobOrder, serial){
+  return `${String(jobOrder || "").trim().toUpperCase()}|${String(serial || "").trim().toUpperCase()}`;
+}
+function unitLabelOf(jobOrder, serial){
+  return `أمر شغل ${jobOrder || "—"}${serial ? ` · S/N ${serial}` : ""}`;
+}
+function unitCount(jobOrder, serial){
+  const key = unitKeyOf(jobOrder, serial);
+  return allRecords.filter(r => unitKeyOf(r.jobOrder, r.serialNumber) === key).length;
+}
+function updatePinnedUnit(){
+  const show = logMode && unitPinned && quickJobOrder.value.trim();
+  pinnedUnitEl.classList.toggle("show", !!show);
+  // لما الحبة مثبتة ما في داعي لسطر الشرح — بنوفّر مساحة على شاشة الموبايل
+  quickFieldsHint.style.display = (logMode && !show) ? "block" : "none";
+  // نخلي آخر رسالة ظاهرة فوق شريط الكتابة مهما تغيّر ارتفاعه
+  requestAnimationFrame(() => {
+    if (composer.offsetHeight) document.getElementById("feedWrap").style.paddingBottom = (composer.offsetHeight + 20) + "px";
+  });
+  if (show) {
+    const n = unitCount(quickJobOrder.value.trim(), quickSerial.value.trim());
+    pinnedUnitLabel.textContent = `📌 ${unitLabelOf(quickJobOrder.value.trim(), quickSerial.value.trim())} — عليها ${n} ملاحظة. اكتب الملاحظة التالية`;
+  }
+}
+function clearUnitFields(){
+  unitPinned = false;
+  quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = ""; quickSerial.value = "";
+  setLogMode(logMode);
+}
+document.getElementById("newUnitBtn").addEventListener("click", clearUnitFields);
+// أي تغيير يدوي برقم أمر الشغل أو S/N معناه حبة ثانية — نلغي التثبيت
+[quickJobOrder, quickSerial].forEach(el => el.addEventListener("input", () => { unitPinned = false; updatePinnedUnit(); }));
+
+// من تبويب السجلات: "➕ ملاحظة على نفس الحبة"
+function startSameUnit(id){
+  const r = allRecords.find(x => x.id === id);
+  if (!r) return;
+  switchTab("chat");
+  if (r.dept && ![...quickDept.options].some(o => o.value === r.dept)) {
+    quickDept.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(r.dept)}">${escapeHtml(deptLabel(r.dept))}</option>`);
+  }
+  quickDept.value = r.dept || "";
+  quickJobOrder.value = r.jobOrder || "";
+  quickSerial.value = r.serialNumber || "";
+  quickIssueType.value = "";
+  unitPinned = true;
+  setLogMode(true);
+  setTimeout(() => composerText.focus(), 120);
 }
 setLogMode(false);
 
@@ -891,7 +1174,7 @@ function generateRecordId(){
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
   const rand = Math.floor(1000 + Math.random() * 9000);
-  return `P2H3-${y}${m}${d}-${rand}`;
+  return `${RECORD_PREFIX}-${y}${m}${d}-${rand}`;
 }
 
 function clearComposer(){
@@ -933,10 +1216,12 @@ async function handleSend(){
         photoUrl: photoDataUrl || "",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
-      showToast(`تم حفظ الملاحظة برقم ${recordId}`, "ok");
-      quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = ""; quickSerial.value = "";
+      showToast(`تم حفظ الملاحظة ${recordId} — بتقدر تضيف ملاحظة ثانية على نفس الحبة`, "ok");
+      // نخلي بيانات الحبة (القسم + أمر الشغل + S/N) مثبتة، ونفرّغ نوع المشكلة والوصف والصورة فقط
+      quickIssueType.value = "";
       clearComposer();
-      setLogMode(false);
+      unitPinned = true;
+      setLogMode(true);
     } catch (err) {
       console.error(err);
       showToast("حدث خطأ أثناء الحفظ، تأكد من الاتصال وحاول مرة أخرى", "err");
@@ -998,6 +1283,8 @@ if (firebaseReady) {
   db.collection(OBS_COLLECTION).orderBy("createdAt", "desc").onSnapshot((snap) => {
     allRecords = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderRecords();
+    renderListSelects();
+    updatePinnedUnit();
     if (viewAnalysis.classList.contains("active")) renderAnalysisSummary();
   }, (err) => console.error(err));
 }
@@ -1034,7 +1321,7 @@ function renderFeed(list){
             <span class="badge ${statusBadgeClass(m.status)}">${m.status}</span>
           </div>
           <div class="obs-id">${m.recordId || ""}${m.serialNumber ? ` · S/N: ${escapeHtml(m.serialNumber)}` : ""}</div>
-          <div class="obs-dept">${m.dept} — أمر شغل ${escapeHtml(m.jobOrder)} · ${m.issueType}</div>
+          <div class="obs-dept">${escapeHtml(deptLabel(m.dept))} — أمر شغل ${escapeHtml(m.jobOrder)} · ${escapeHtml(m.issueType)}</div>
           <div class="obs-desc">${escapeHtml(m.description)}</div>
           ${m.photoUrl ? `<img class="obs-photo" src="${m.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${m.photoUrl}')">` : ""}
           <div class="obs-meta">${escapeHtml(m.reporterName)} · ${time}</div>
@@ -1073,14 +1360,40 @@ const recordsContainer = document.getElementById("recordsContainer");
 const filterDept   = document.getElementById("filterDept");
 const filterStatus = document.getElementById("filterStatus");
 
+const recordSearch = document.getElementById("recordSearch");
+const recCount     = document.getElementById("recCount");
+
 filterDept.addEventListener("change", renderRecords);
 filterStatus.addEventListener("change", renderRecords);
+recordSearch.addEventListener("input", renderRecords);
+
+function filterByUnit(id){
+  const r = allRecords.find(x => x.id === id);
+  if (!r) return;
+  recordSearch.value = r.serialNumber || r.jobOrder || "";
+  filterDept.value = ""; filterStatus.value = "";
+  renderRecords();
+  window.scrollTo(0, 0);
+}
 
 function renderRecords(){
   let list = allRecords;
   const d = filterDept.value, s = filterStatus.value;
+  const q = recordSearch.value.trim().toLowerCase();
   if (d) list = list.filter(r => r.dept === d);
   if (s) list = list.filter(r => r.status === s);
+  if (q) list = list.filter(r =>
+    [r.jobOrder, r.serialNumber, r.recordId, r.description, r.owner, r.reporterName]
+      .some(v => String(v || "").toLowerCase().includes(q)));
+
+  // عدد الملاحظات على كل حبة (من كل السجلات، مش بس المفلترة)
+  const unitCounts = {};
+  allRecords.forEach(r => {
+    const k = unitKeyOf(r.jobOrder, r.serialNumber);
+    unitCounts[k] = (unitCounts[k] || 0) + 1;
+  });
+
+  recCount.textContent = list.length ? `عدد النتائج: ${list.length}` : "";
 
   if (list.length === 0) {
     recordsContainer.innerHTML = `
@@ -1091,7 +1404,9 @@ function renderRecords(){
     return;
   }
 
-  recordsContainer.innerHTML = list.map(r => `
+  recordsContainer.innerHTML = list.map(r => {
+    const uc = unitCounts[unitKeyOf(r.jobOrder, r.serialNumber)] || 1;
+    return `
     <div class="rec-card">
       ${r.photoUrl
         ? `<img class="rec-thumb" src="${r.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${r.photoUrl}')">`
@@ -1101,40 +1416,45 @@ function renderRecords(){
           <span class="rec-id">${r.recordId || ""}${r.serialNumber ? ` · S/N: ${escapeHtml(r.serialNumber)}` : ""}</span>
           <span class="badge ${statusBadgeClass(r.status)}">${r.status}</span>
         </div>
-        <div class="rec-dept">${r.dept} — أمر شغل ${escapeHtml(r.jobOrder)}</div>
+        <div class="rec-dept">${escapeHtml(deptLabel(r.dept))} — أمر شغل ${escapeHtml(r.jobOrder)}</div>
+        ${uc > 1 ? `<span class="unit-badge" onclick="filterByUnit('${r.id}')">🔁 الحبة عليها ${uc} ملاحظات — اعرضها</span>` : ""}
         <div class="rec-desc">${escapeHtml(r.description)}</div>
         <div class="rec-meta">
-          <span>النوع: ${r.issueType}</span>
+          <span>النوع: ${escapeHtml(r.issueType)}</span>
           ${r.downtime ? `<span>الركود: ${r.downtime} س</span>` : ""}
-          ${r.owner ? `<span>المسؤول: ${r.owner}</span>` : ""}
-          <span>المسجّل: ${r.reporterName}</span>
+          ${r.owner ? `<span>المسؤول: ${escapeHtml(r.owner)}</span>` : ""}
+          <span>المسجّل: ${escapeHtml(r.reporterName)}</span>
         </div>
         <div class="rec-actions">
-          <button type="button" class="rec-edit-btn" onclick="openEditRecord('${r.id}')">✏️ تحديث / تسكير الملاحظة</button>
+          <button type="button" class="rec-same-btn" onclick="startSameUnit('${r.id}')">➕ ملاحظة على نفس الحبة</button>
+          <button type="button" class="rec-edit-btn" onclick="openEditRecord('${r.id}')">✏️ تحديث / تسكير</button>
           <button type="button" class="rec-delete-btn" onclick="requestDelete('${r.id}')">🗑️ حذف</button>
         </div>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 }
 
-let pendingDeleteId = null;
+let pendingAdminAction = null;
 const adminPasswordModal   = document.getElementById("adminPasswordModal");
 const adminPasswordInput   = document.getElementById("adminPasswordInput");
 const adminPasswordCancel  = document.getElementById("adminPasswordCancel");
 const adminPasswordConfirm = document.getElementById("adminPasswordConfirm");
 
-function requestDelete(id){
-  if (isUnlocked()) { deleteRecord(id); return; }
-  pendingDeleteId = id;
+function requestAdmin(action){
+  if (isUnlocked()) { action(); return; }
+  pendingAdminAction = action;
   adminPasswordInput.value = "";
   adminPasswordModal.classList.add("show");
   setTimeout(() => adminPasswordInput.focus(), 150);
 }
+function requestDelete(id){
+  requestAdmin(() => deleteRecord(id));
+}
 
 adminPasswordCancel.addEventListener("click", () => {
   adminPasswordModal.classList.remove("show");
-  pendingDeleteId = null;
+  pendingAdminAction = null;
 });
 adminPasswordInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); adminPasswordConfirm.click(); }
@@ -1149,9 +1469,9 @@ adminPasswordConfirm.addEventListener("click", async () => {
   }
   sessionStorage.setItem(ADMIN_UNLOCK_KEY, "1");
   adminPasswordModal.classList.remove("show");
-  const id = pendingDeleteId;
-  pendingDeleteId = null;
-  if (id) deleteRecord(id);
+  const action = pendingAdminAction;
+  pendingAdminAction = null;
+  if (action) action();
 });
 
 async function deleteRecord(id){
@@ -1185,13 +1505,15 @@ function openEditRecord(id){
   const record = allRecords.find(r => r.id === id);
   if (!record) return;
   editingRecordId = id;
-  editRecordSub.textContent = `رقم السجل: ${record.recordId || ""} — ${record.dept} · أمر شغل ${record.jobOrder}`;
+  editRecordSub.textContent = `رقم السجل: ${record.recordId || ""} — ${deptLabel(record.dept)} · أمر شغل ${record.jobOrder}`;
   editStatus.value = record.status || "مفتوحة";
   editAction.value = record.action || "";
   editDowntime.value = record.downtime || 0;
   editSerial.value = record.serialNumber || "";
+  const ownerNames = [...allNames];
+  if (record.owner && !ownerNames.includes(record.owner)) ownerNames.push(record.owner); // مسؤول انشال من القائمة
   editOwner.innerHTML = `<option value="">بدون تحديد</option>` +
-    allNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+    ownerNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
   editOwner.value = record.owner || "";
   editRecordModal.classList.add("show");
 }
@@ -1206,13 +1528,23 @@ editRecordConfirm.addEventListener("click", async () => {
   if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
   editRecordConfirm.disabled = true;
   try {
-    await db.collection(OBS_COLLECTION).doc(editingRecordId).update({
+    const record = allRecords.find(r => r.id === editingRecordId) || {};
+    const upd = {
       status: editStatus.value,
       action: editAction.value.trim(),
       owner: editOwner.value,
       downtime: parseFloat(editDowntime.value) || 0,
       serialNumber: editSerial.value.trim(),
-    });
+    };
+    // تاريخ الإغلاق: بيلزم لحساب "متوسط أيام الإغلاق" وعمر الملاحظات بالتقرير
+    if (upd.status === "مغلقة" && record.status !== "مغلقة") {
+      upd.closedAt = firebase.firestore.FieldValue.serverTimestamp();
+      upd.closedBy = chatIdentitySel.value || "";
+    } else if (upd.status !== "مغلقة" && record.status === "مغلقة") {
+      upd.closedAt = null;
+      upd.closedBy = "";
+    }
+    await db.collection(OBS_COLLECTION).doc(editingRecordId).update(upd);
     editRecordModal.classList.remove("show");
     showToast("تم تحديث الملاحظة بنجاح", "ok");
     editingRecordId = null;
@@ -1258,10 +1590,12 @@ function renderOrUpdateChart(canvasId, config){
 (function setDefaultAnalysisRange(){
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const toStr = (d) => d.toISOString().slice(0, 10);
-  analysisFrom.value = toStr(firstOfMonth);
-  analysisTo.value = toStr(today);
+  analysisFrom.value = localDateStr(firstOfMonth);
+  analysisTo.value = localDateStr(today);
 })();
+function pad2(n){ return String(n).padStart(2, "0"); }
+// تاريخ محلي (مش UTC) — عشان أول الشهر ما يطلع آخر يوم بالشهر الماضي بعد منتصف الليل
+function localDateStr(d){ return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 
 analysisFrom.addEventListener("change", renderAnalysisSummary);
 analysisTo.addEventListener("change", renderAnalysisSummary);
@@ -1277,22 +1611,108 @@ function getRecordsInRange(){
   });
 }
 
-function countBy(list, key){
-  const counts = {};
+/* ---- أدوات حساب مشتركة بين شاشة التحليل وتقرير Excel ---- */
+const DAY_MS = 86400000;
+const LATE_DAYS = 7; // الملاحظة المفتوحة أكثر من هيك بتعتبر متأخرة
+function toDateSafe(ts){ return (ts && ts.toDate) ? ts.toDate() : null; }
+function countByFn(list, fn){
+  const c = {};
+  list.forEach(r => { const k = fn(r) || "غير محدد"; c[k] = (c[k] || 0) + 1; });
+  return c;
+}
+function sumByFn(list, fn, valFn){
+  const s = {};
+  list.forEach(r => { const k = fn(r) || "غير محدد"; s[k] = (s[k] || 0) + (valFn(r) || 0); });
+  return s;
+}
+function sortedEntries(obj){ return Object.entries(obj).sort((a, b) => b[1] - a[1]); }
+function pct(n, total){ return total ? n / total : 0; }
+function fmtPct(x){ return Math.round(x * 100) + "%"; }
+function round1(x){ return Math.round((x || 0) * 10) / 10; }
+
+function computeStats(list){
+  const now = Date.now();
+  const total = list.length;
+  const dt = (r) => parseFloat(r.downtime) || 0;
+  const byDept   = countByFn(list, r => deptLabel(r.dept));
+  const byType   = countByFn(list, r => r.issueType);
+  const byStatus = countByFn(list, r => r.status || "مفتوحة");
+  const byReporter = countByFn(list, r => r.reporterName);
+  const openByDept = countByFn(list.filter(r => r.status !== "مغلقة"), r => deptLabel(r.dept));
+  const downtimeByDept = sumByFn(list, r => deptLabel(r.dept), dt);
+  const totalDowntime = list.reduce((s, r) => s + dt(r), 0);
+
+  const closed   = list.filter(r => r.status === "مغلقة");
+  const openList = list.filter(r => r.status !== "مغلقة");
+  const closeDays = closed.map(r => {
+    const c = toDateSafe(r.closedAt), o = toDateSafe(r.createdAt);
+    return (c && o) ? Math.max(0, (c - o) / DAY_MS) : null;
+  }).filter(x => x !== null);
+  const avgCloseDays = closeDays.length ? closeDays.reduce((a, b) => a + b, 0) / closeDays.length : null;
+
+  const ageOf = (r) => {
+    const o = toDateSafe(r.createdAt);
+    return o ? Math.floor((now - o.getTime()) / DAY_MS) : 0;
+  };
+  const openAged = openList.map(r => ({ r, age: ageOf(r) })).sort((a, b) => b.age - a.age);
+  const lateOpen = openAged.filter(x => x.age >= LATE_DAYS).length;
+
+  // التجميع حسب الحبة (أمر شغل + S/N)
+  const units = new Map();
   list.forEach(r => {
-    const k = r[key] || "غير محدد";
-    counts[k] = (counts[k] || 0) + 1;
+    const k = unitKeyOf(r.jobOrder, r.serialNumber);
+    if (!units.has(k)) units.set(k, { key: k, jobOrder: r.jobOrder, serial: r.serialNumber, items: [] });
+    units.get(k).items.push(r);
   });
-  return counts;
+  const unitList = [...units.values()].map(u => {
+    u.items.sort((a, b) => tsMillis(a.createdAt) - tsMillis(b.createdAt));
+    u.open = u.items.filter(r => r.status !== "مغلقة").length;
+    u.downtime = u.items.reduce((s, r) => s + dt(r), 0);
+    u.first = toDateSafe(u.items[0].createdAt);
+    u.last  = toDateSafe(u.items[u.items.length - 1].createdAt);
+    u.dept  = deptLabel(u.items[0].dept);
+    return u;
+  }).sort((a, b) => b.items.length - a.items.length || tsMillis(a.items[0].createdAt) - tsMillis(b.items[0].createdAt));
+  const repeatUnits = unitList.filter(u => u.items.length > 1);
+
+  // باريتو أنواع المشاكل
+  let cum = 0;
+  const pareto = sortedEntries(byType).map(([k, v]) => { cum += v; return { k, v, p: pct(v, total), cum: pct(cum, total) }; });
+
+  return {
+    total, byDept, byType, byStatus, byReporter, openByDept, downtimeByDept, totalDowntime,
+    closed, openList, closureRate: pct(closed.length, total), avgCloseDays,
+    openAged, lateOpen, unitList, repeatUnits, pareto, ageOf
+  };
 }
 
-function sumBy(list, key, valueKey){
-  const sums = {};
-  list.forEach(r => {
-    const k = r[key] || "غير محدد";
-    sums[k] = (sums[k] || 0) + (parseFloat(r[valueKey]) || 0);
-  });
-  return sums;
+function buildFindings(S){
+  const f = [];
+  if (!S.total) return f;
+  const topDept = sortedEntries(S.byDept)[0];
+  if (topDept) f.push(`القسم الأعلى بالملاحظات: ${topDept[0]} — ${topDept[1]} ملاحظة (${fmtPct(pct(topDept[1], S.total))} من الإجمالي).`);
+  const p = S.pareto;
+  if (p.length) {
+    f.push(`نوع المشكلة الأكثر تكراراً: ${p[0].k} — ${p[0].v} ملاحظة (${fmtPct(p[0].p)}).`);
+    const n80 = p.findIndex(x => x.cum >= 0.8) + 1;
+    if (p.length > 2 && n80 && n80 < p.length) {
+      f.push(`${n80} من أصل ${p.length} أنواع مشاكل بتشكّل ${fmtPct(p[n80 - 1].cum)} من الملاحظات — التركيز عليها بيعطي أكبر أثر (باريتو).`);
+    }
+  }
+  if (S.repeatUnits.length) {
+    const u = S.repeatUnits[0];
+    f.push(`${S.repeatUnits.length} حبة عليها أكثر من ملاحظة؛ الأعلى: ${unitLabelOf(u.jobOrder, u.serial)} بـ ${u.items.length} ملاحظات.`);
+  } else {
+    f.push("ما في ولا حبة عليها أكثر من ملاحظة بهالفترة.");
+  }
+  f.push(`نسبة الإغلاق ${fmtPct(S.closureRate)} (${S.closed.length} من ${S.total})` +
+    (S.avgCloseDays !== null ? `، ومتوسط مدة الإغلاق ${S.avgCloseDays.toFixed(1)} يوم.` : "."));
+  if (S.lateOpen) f.push(`${S.lateOpen} ملاحظة مفتوحة صار عمرها ${LATE_DAYS} أيام أو أكثر — بتحتاج متابعة مع الجهة المسؤولة.`);
+  const noOwner = S.openList.filter(r => !r.owner).length;
+  if (noOwner) f.push(`${noOwner} ملاحظة مفتوحة بدون مسؤول متابعة محدد.`);
+  const topDt = sortedEntries(S.downtimeByDept)[0];
+  if (topDt && topDt[1] > 0) f.push(`القسم الأعلى بساعات التوقف: ${topDt[0]} — ${round1(topDt[1])} ساعة من أصل ${round1(S.totalDowntime)}.`);
+  return f;
 }
 
 const CHART_COLORS = ["#065A82", "#1C7293", "#E8A33D", "#21295C", "#B3432E", "#1E7A4C", "#7A5316"];
@@ -1315,122 +1735,528 @@ function renderAnalysisSummary(){
     el.closest(".card").style.display = chartsOk ? "block" : "none";
   });
 
-  const totalDowntime = list.reduce((sum, r) => sum + (parseFloat(r.downtime) || 0), 0);
-  const byDept        = countBy(list, "dept");
-  const byType        = countBy(list, "issueType");
-  const byStatus      = countBy(list, "status");
-  const downtimeByDept = sumBy(list, "dept", "downtime");
+  const S = computeStats(list);
 
-  const breakdownHtml = (counts) => Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
+  const breakdownHtml = (counts) => sortedEntries(counts)
     .map(([k, v]) => `<div class="breakdown-row"><span>${escapeHtml(k)}</span><span class="n">${v}</span></div>`)
     .join("");
 
   document.getElementById("statGrid").innerHTML = `
-    <div class="stat-box"><div class="num">${list.length}</div><div class="lbl">عدد الملاحظات</div></div>
-    <div class="stat-box"><div class="num">${totalDowntime}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
-    <div class="stat-box"><div class="num">${byStatus["مغلقة"] || 0}</div><div class="lbl">ملاحظات مغلقة</div></div>
-    <div class="stat-box"><div class="num">${(byStatus["مفتوحة"] || 0) + (byStatus["قيد المعالجة"] || 0)}</div><div class="lbl">لسا مفتوحة</div></div>
+    <div class="stat-box"><div class="num">${S.total}</div><div class="lbl">عدد الملاحظات</div></div>
+    <div class="stat-box"><div class="num">${S.unitList.length}</div><div class="lbl">حبات عليها ملاحظات</div></div>
+    <div class="stat-box"><div class="num">${fmtPct(S.closureRate)}</div><div class="lbl">نسبة الإغلاق</div></div>
+    <div class="stat-box"><div class="num">${S.openList.length}</div><div class="lbl">لسا مفتوحة</div></div>
+    <div class="stat-box"><div class="num">${round1(S.totalDowntime)}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
+    <div class="stat-box"><div class="num">${S.avgCloseDays !== null ? S.avgCloseDays.toFixed(1) : "—"}</div><div class="lbl">متوسط أيام الإغلاق</div></div>
+    <div class="stat-box"><div class="num" style="color:${S.lateOpen ? "var(--danger)" : "var(--navy)"}">${S.lateOpen}</div><div class="lbl">مفتوحة أكثر من ${LATE_DAYS} أيام</div></div>
+    <div class="stat-box"><div class="num">${S.repeatUnits.length}</div><div class="lbl">حبات عليها أكثر من ملاحظة</div></div>
   `;
-  document.getElementById("breakdownDept").innerHTML = breakdownHtml(byDept);
-  document.getElementById("breakdownType").innerHTML = breakdownHtml(byType);
-  document.getElementById("breakdownStatus").innerHTML = breakdownHtml(byStatus);
 
-  const deptLabels = Object.keys(byDept);
+  document.getElementById("findingsList").innerHTML =
+    buildFindings(S).map(t => `<div class="breakdown-row"><span>• ${escapeHtml(t)}</span></div>`).join("");
+
+  document.getElementById("breakdownDept").innerHTML = breakdownHtml(S.byDept);
+  document.getElementById("breakdownType").innerHTML = breakdownHtml(S.byType);
+  document.getElementById("breakdownStatus").innerHTML = breakdownHtml(S.byStatus);
+
+  document.getElementById("breakdownUnits").innerHTML = S.repeatUnits.length
+    ? S.repeatUnits.slice(0, 10).map(u =>
+        `<div class="breakdown-row"><span><bdi>${escapeHtml(unitLabelOf(u.jobOrder, u.serial))}</bdi> · <bdi>${escapeHtml(u.dept)}</bdi>${u.open ? ` · ${u.open} مفتوحة` : ""}</span><span class="n">${u.items.length}</span></div>`).join("")
+    : `<div class="hint">كل حبة عليها ملاحظة وحدة بس بهالفترة.</div>`;
+
+  document.getElementById("breakdownAging").innerHTML = S.openAged.length
+    ? S.openAged.slice(0, 10).map(({ r, age }) =>
+        `<div class="breakdown-row aging-row"><span><bdi>${escapeHtml(r.recordId || "")}</bdi> · <bdi>${escapeHtml(deptLabel(r.dept))}</bdi> · <bdi>${escapeHtml(unitLabelOf(r.jobOrder, r.serialNumber))}</bdi>${r.owner ? ` · ${escapeHtml(r.owner)}` : ""}</span><span class="n ${age >= LATE_DAYS ? "late" : ""}">${age} يوم</span></div>`).join("")
+    : `<div class="hint">ما في ملاحظات مفتوحة بهالفترة 👍</div>`;
+
+  const deptLabels = Object.keys(S.byDept);
   renderOrUpdateChart("chartByDept", {
     type: "bar",
-    data: { labels: deptLabels, datasets: [{ data: Object.values(byDept), backgroundColor: CHART_COLORS, borderRadius: 6 }] },
+    data: { labels: deptLabels, datasets: [{ data: Object.values(S.byDept), backgroundColor: CHART_COLORS, borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   });
 
-  const typeLabels = Object.keys(byType);
+  // باريتو: أعمدة العدد + خط النسبة التراكمية
   renderOrUpdateChart("chartByType", {
     type: "bar",
-    data: { labels: typeLabels, datasets: [{ data: Object.values(byType), backgroundColor: CHART_COLORS, borderRadius: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    data: {
+      labels: S.pareto.map(x => x.k),
+      datasets: [
+        { type: "bar", label: "العدد", data: S.pareto.map(x => x.v), backgroundColor: "#065A82", borderRadius: 6, yAxisID: "y", order: 2 },
+        { type: "line", label: "التراكمي %", data: S.pareto.map(x => Math.round(x.cum * 100)), borderColor: "#E8A33D", backgroundColor: "#E8A33D", yAxisID: "y1", order: 1, tension: 0.2, pointRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: "bottom" } },
+      scales: {
+        y:  { beginAtZero: true, ticks: { precision: 0 } },
+        y1: { position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + "%" } }
+      }
+    }
   });
 
-  const statusLabels = Object.keys(byStatus);
+  const statusLabels = Object.keys(S.byStatus);
   renderOrUpdateChart("chartByStatus", {
     type: "doughnut",
-    data: { labels: statusLabels, datasets: [{ data: Object.values(byStatus), backgroundColor: statusLabels.map(s => STATUS_COLORS[s] || "#5B6672") }] },
+    data: { labels: statusLabels, datasets: [{ data: Object.values(S.byStatus), backgroundColor: statusLabels.map(s => STATUS_COLORS[s] || "#5B6672") }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
   });
 
-  const deptDowntimeLabels = Object.keys(downtimeByDept);
+  const deptDowntimeLabels = Object.keys(S.downtimeByDept);
   renderOrUpdateChart("chartDowntime", {
     type: "bar",
-    data: { labels: deptDowntimeLabels, datasets: [{ data: Object.values(downtimeByDept), backgroundColor: "#E8A33D", borderRadius: 6 }] },
+    data: { labels: deptDowntimeLabels, datasets: [{ data: Object.values(S.downtimeByDept), backgroundColor: "#E8A33D", borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
   });
 }
 
-exportExcelBtn.addEventListener("click", () => {
-  const list = getRecordsInRange();
-  if (list.length === 0) {
-    showToast("ما في سجلات بهاي الفترة عشان نصدّرها", "err");
+/* =====================================================================
+   تقرير Excel (ExcelJS) — مع صورة كل ملاحظة داخل الملف
+   صفحات التقرير: الملخص (مؤشرات + أبرز النتائج + جداول + رسوم) /
+   الملاحظات (كل ملاحظة مع صورتها، مجمّعة حسب الحبة) / حسب الحبة / المفتوحة
+   ===================================================================== */
+const XL = {
+  navy: "FF21295C", deep: "FF065A82", teal: "FF1C7293", amber: "FFE8A33D",
+  light: "FFEEF3F5", line: "FFD5DEE3", white: "FFFFFFFF", muted: "FF5B6672",
+  openFill: "FFFBE8E4", wipFill: "FFFBEED9", okFill: "FFE1F2E8", groupFill: "FFF3F8FA", danger: "FFB3432E"
+};
+const XL_FONT = "Arial";
+const XL_BORDER = {
+  top:    { style: "thin", color: { argb: XL.line } },
+  left:   { style: "thin", color: { argb: XL.line } },
+  bottom: { style: "thin", color: { argb: XL.line } },
+  right:  { style: "thin", color: { argb: XL.line } },
+};
+const XL_TEAM = "Quality Team in Electrical Panel";
+
+// ExcelJS بيحوّل التواريخ على UTC — منعوّض فرق التوقيت عشان يطلع التاريخ والوقت المحلي صح
+function xlDate(d){
+  return d ? new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds())) : null;
+}
+function fmtTime(d){ return d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : ""; }
+function statusFill(s){ return s === "مغلقة" ? XL.okFill : s === "قيد المعالجة" ? XL.wipFill : XL.openFill; }
+function fill(argb){ return { type: "pattern", pattern: "solid", fgColor: { argb } }; }
+
+function styleHeaderRow(row){
+  row.eachCell(c => {
+    c.font = { name: XL_FONT, bold: true, color: { argb: XL.white }, size: 11 };
+    c.fill = fill(XL.navy);
+    c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    c.border = XL_BORDER;
+  });
+  row.height = 34;
+}
+function styleBodyCell(c, opts = {}){
+  c.font = { name: XL_FONT, size: 10.5, ...(opts.font || {}) };
+  c.alignment = { vertical: "middle", horizontal: opts.h || "right", wrapText: true, readingOrder: "rtl" };
+  c.border = XL_BORDER;
+  if (opts.fill) c.fill = fill(opts.fill);
+  if (opts.fmt) c.numFmt = opts.fmt;
+}
+
+function loadImageSize(dataUrl){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload  = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => res(null);
+    img.src = dataUrl;
+  });
+}
+function fitBox(w, h, maxW, maxH){
+  const s = Math.min(maxW / w, maxH / h, 1);
+  return { width: Math.round(w * s), height: Math.round(h * s) };
+}
+
+// تسجيل كل صورة مرة وحدة بالملف — وبنقدر نعرضها بأكثر من صفحة بدون ما يكبر حجم الملف
+async function registerPhotos(wb, list){
+  const map = new Map();
+  for (const r of list) {
+    if (!r.photoUrl) continue;
+    const m = String(r.photoUrl).match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i);
+    if (!m) continue;
+    const size = await loadImageSize(r.photoUrl);
+    if (!size || !size.w) continue;
+    const ext = m[1].toLowerCase() === "jpg" ? "jpeg" : m[1].toLowerCase();
+    map.set(r.id, { imageId: wb.addImage({ base64: m[2], extension: ext }), w: size.w, h: size.h });
+  }
+  return map;
+}
+function placePhoto(ws, info, col0, row0, maxW, maxH){
+  const ext = fitBox(info.w, info.h, maxW, maxH);
+  ws.addImage(info.imageId, { tl: { col: col0 + 0.08, row: row0 + 0.08 }, ext, editAs: "oneCell" });
+}
+
+// صورة الرسوم البيانية من شاشة التحليل (على خلفية بيضاء)
+function captureCharts(){
+  if (typeof Chart === "undefined") return [];
+  return [
+    ["chartByDept",   "الملاحظات حسب القسم"],
+    ["chartByType",   "باريتو أنواع المشاكل"],
+    ["chartByStatus", "توزيع الحالات"],
+    ["chartDowntime", "ساعات التوقف حسب القسم"],
+  ].map(([id, title]) => {
+    const c = document.getElementById(id);
+    if (!c || !chartInstances[id] || !c.width || !c.height) return null;
+    const tmp = document.createElement("canvas");
+    tmp.width = c.width; tmp.height = c.height;
+    const ctx = tmp.getContext("2d");
+    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, tmp.width, tmp.height);
+    ctx.drawImage(c, 0, 0);
+    return { title, base64: tmp.toDataURL("image/png").split(",")[1], w: c.width, h: c.height };
+  }).filter(Boolean);
+}
+
+function writeTable(ws, startRow, title, headers, rows, colFmts = []){
+  let r = startRow;
+  ws.mergeCells(r, 1, r, headers.length);
+  const t = ws.getCell(r, 1);
+  t.value = title;
+  t.font = { name: XL_FONT, bold: true, size: 12, color: { argb: XL.teal } };
+  t.alignment = { horizontal: "right", vertical: "middle", readingOrder: "rtl" };
+  ws.getRow(r).height = 24;
+  r++;
+  const hr = ws.getRow(r);
+  headers.forEach((h, i) => { hr.getCell(i + 1).value = h; });
+  styleHeaderRow(hr);
+  hr.height = 26;
+  r++;
+  rows.forEach((vals, idx) => {
+    const row = ws.getRow(r);
+    vals.forEach((v, i) => {
+      const c = row.getCell(i + 1);
+      c.value = v;
+      styleBodyCell(c, { h: i === 0 ? "right" : "center", fmt: colFmts[i], fill: idx % 2 ? XL.groupFill : null });
+    });
+    r++;
+  });
+  if (!rows.length) {
+    ws.mergeCells(r, 1, r, headers.length);
+    const c = ws.getCell(r, 1);
+    c.value = "لا يوجد";
+    styleBodyCell(c, { h: "center" });
+    r++;
+  }
+  return r + 1;
+}
+
+function buildSummarySheet(wb, S, meta, charts){
+  const ws = wb.addWorksheet("الملخص", {
+    views: [{ rightToLeft: true, showGridLines: false }],
+    pageSetup: { orientation: "portrait", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+  });
+  ws.columns = [
+    { width: 26 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
+    { width: 3 }, ...Array.from({ length: 8 }, () => ({ width: 10 }))
+  ];
+
+  let r = 1;
+  ws.mergeCells(r, 1, r, 8);
+  Object.assign(ws.getCell(r, 1), {
+    value: `${XL_TEAM} — تقرير ملاحظات الإنتاج`,
+    font: { name: XL_FONT, bold: true, size: 16, color: { argb: XL.white } },
+    fill: fill(XL.navy),
+    alignment: { horizontal: "center", vertical: "middle", readingOrder: "rtl" }
+  });
+  ws.getRow(r).height = 36; r++;
+
+  ws.mergeCells(r, 1, r, 8);
+  Object.assign(ws.getCell(r, 1), {
+    value: `الفترة: من ${meta.from} إلى ${meta.to}   |   تاريخ الإصدار: ${meta.generated}   |   أعدّه: ${meta.by || "—"}`,
+    font: { name: XL_FONT, size: 10.5, color: { argb: XL.muted } },
+    alignment: { horizontal: "center", vertical: "middle", readingOrder: "rtl" }
+  });
+  ws.getRow(r).height = 22; r += 2;
+
+  // ---- المؤشرات الرئيسية (بطاقات) ----
+  ws.mergeCells(r, 1, r, 8);
+  Object.assign(ws.getCell(r, 1), { value: "المؤشرات الرئيسية", font: { name: XL_FONT, bold: true, size: 12, color: { argb: XL.teal } }, alignment: { horizontal: "right", readingOrder: "rtl" } });
+  r++;
+  const kpis = [
+    [S.total, "إجمالي الملاحظات", "0"],
+    [S.unitList.length, "حبات عليها ملاحظات", "0"],
+    [S.closureRate, "نسبة الإغلاق", "0%"],
+    [S.openList.length, "ملاحظات لسا مفتوحة", "0", S.openList.length ? XL.danger : null],
+    [round1(S.totalDowntime), "إجمالي ساعات التوقف", "0.0"],
+    [S.avgCloseDays !== null ? round1(S.avgCloseDays) : "—", "متوسط أيام الإغلاق", "0.0"],
+    [S.lateOpen, `مفتوحة أكثر من ${LATE_DAYS} أيام`, "0", S.lateOpen ? XL.danger : null],
+    [S.repeatUnits.length, "حبات عليها أكثر من ملاحظة", "0"],
+  ];
+  // البطاقات: 4 بالسطر، كل بطاقة عمودين (العمود الأول عريض فبنعطيه بطاقة لحاله)
+  const tileCols = [[1, 1], [2, 3], [4, 5], [6, 8]];
+  for (let i = 0; i < kpis.length; i += 4) {
+    const vr = r, lr = r + 1;
+    kpis.slice(i, i + 4).forEach(([val, lbl, fmt, color], j) => {
+      const [c1, c2] = tileCols[j];
+      if (c2 > c1) { ws.mergeCells(vr, c1, vr, c2); ws.mergeCells(lr, c1, lr, c2); }
+      const vc = ws.getCell(vr, c1), lc = ws.getCell(lr, c1);
+      vc.value = val; vc.numFmt = fmt;
+      vc.font = { name: XL_FONT, bold: true, size: 20, color: { argb: color || XL.navy } };
+      vc.alignment = { horizontal: "center", vertical: "middle" };
+      vc.fill = fill(XL.light);
+      lc.value = lbl;
+      lc.font = { name: XL_FONT, size: 10, color: { argb: XL.muted } };
+      lc.alignment = { horizontal: "center", vertical: "top", wrapText: true, readingOrder: "rtl" };
+      lc.fill = fill(XL.light);
+      for (let c = c1; c <= c2; c++) {
+        ws.getCell(vr, c).border = { top: { style: "medium", color: { argb: XL.amber } } };
+      }
+    });
+    ws.getRow(vr).height = 38; ws.getRow(lr).height = 22;
+    r += 3;
+  }
+
+  // ---- أبرز النتائج ----
+  ws.mergeCells(r, 1, r, 8);
+  Object.assign(ws.getCell(r, 1), { value: "أبرز النتائج", font: { name: XL_FONT, bold: true, size: 12, color: { argb: XL.teal } }, alignment: { horizontal: "right", readingOrder: "rtl" } });
+  r++;
+  buildFindings(S).forEach(t => {
+    ws.mergeCells(r, 1, r, 8);
+    const c = ws.getCell(r, 1);
+    c.value = "•  " + t;
+    c.font = { name: XL_FONT, size: 11 };
+    c.alignment = { horizontal: "right", vertical: "middle", wrapText: true, readingOrder: "rtl" };
+    ws.getRow(r).height = t.length > 90 ? 34 : 20;
+    r++;
+  });
+  r++;
+
+  // ---- الجداول ----
+  const T = S.total;
+  r = writeTable(ws, r, "حسب القسم",
+    ["القسم", "عدد الملاحظات", "النسبة", "مفتوحة", "ساعات التوقف"],
+    sortedEntries(S.byDept).map(([k, v]) => [k, v, pct(v, T), S.openByDept[k] || 0, round1(S.downtimeByDept[k])]),
+    [null, "0", "0%", "0", "0.0"]);
+  r = writeTable(ws, r, "باريتو أنواع المشاكل",
+    ["نوع المشكلة", "العدد", "النسبة", "النسبة التراكمية"],
+    S.pareto.map(x => [x.k, x.v, x.p, x.cum]),
+    [null, "0", "0%", "0%"]);
+  r = writeTable(ws, r, "حسب الحالة",
+    ["الحالة", "العدد", "النسبة"],
+    sortedEntries(S.byStatus).map(([k, v]) => [k, v, pct(v, T)]),
+    [null, "0", "0%"]);
+  r = writeTable(ws, r, "حسب المسجّل",
+    ["الاسم", "عدد الملاحظات", "النسبة"],
+    sortedEntries(S.byReporter).map(([k, v]) => [k, v, pct(v, T)]),
+    [null, "0", "0%"]);
+
+  // ---- الرسوم البيانية (جنب الجداول) ----
+  let cr = 4; // صف البداية (0-based) للرسوم
+  charts.forEach(ch => {
+    const t = ws.getCell(cr + 1, 10);
+    t.value = ch.title;
+    t.font = { name: XL_FONT, bold: true, size: 11, color: { argb: XL.teal } };
+    t.alignment = { horizontal: "right", readingOrder: "rtl" };
+    const id = wb.addImage({ base64: ch.base64, extension: "png" });
+    const ext = fitBox(ch.w, ch.h, 520, 280);
+    ws.addImage(id, { tl: { col: 9.1, row: cr + 1.2 }, ext, editAs: "oneCell" });
+    cr += Math.ceil(ext.height / 20) + 3;
+  });
+
+  ws.headerFooter.oddFooter = `&L&8${XL_TEAM}&R&8صفحة &P من &N`;
+}
+
+const REC_COLS = [
+  { h: "#",                       w: 5 },
+  { h: "رقم السجل",               w: 20 },
+  { h: "التاريخ",                 w: 12, fmt: "dd/mm/yyyy" },
+  { h: "الوقت",                   w: 8 },
+  { h: "القسم",                   w: 12 },
+  { h: "رقم أمر الشغل",           w: 13 },
+  { h: "S/N",                     w: 13 },
+  { h: "ترتيبها على الحبة",       w: 11 },
+  { h: "نوع المشكلة",             w: 12 },
+  { h: "وصف الملاحظة",            w: 42 },
+  { h: "الصورة",                  w: 25 },
+  { h: "الحالة",                  w: 12 },
+  { h: "العمر / مدة الإغلاق (يوم)", w: 12, fmt: "0" },
+  { h: "المسؤول",                 w: 16 },
+  { h: "الإجراء المتخذ",          w: 34 },
+  { h: "ساعات التوقف",            w: 10, fmt: "0.0" },
+  { h: "المسجّل",                 w: 16 },
+  { h: "تاريخ الإغلاق",           w: 12, fmt: "dd/mm/yyyy" },
+];
+const PHOTO_ROW_PT = 100;        // ارتفاع صف فيه صورة (نقطة) ≈ 133 بكسل
+const PHOTO_MAX = [168, 124];    // أقصى أبعاد للصورة داخل الخلية (بكسل)
+
+function setupTableSheet(ws, cols){
+  ws.columns = cols.map(c => ({ width: c.w }));
+  const hr = ws.getRow(1);
+  cols.forEach((c, i) => { hr.getCell(i + 1).value = c.h; });
+  styleHeaderRow(hr);
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
+  ws.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:1" };
+  ws.headerFooter.oddFooter = `&L&8${XL_TEAM}&R&8صفحة &P من &N`;
+}
+
+function photoCellFallback(c, r){
+  if (r.photoUrl && /^https?:/i.test(r.photoUrl)) {
+    c.value = { text: "فتح الصورة", hyperlink: r.photoUrl };
+    c.font = { name: XL_FONT, color: { argb: XL.deep }, underline: true };
+  } else {
+    c.value = "—";
+  }
+}
+
+function buildRecordsSheet(wb, S, photos){
+  const ws = wb.addWorksheet("الملاحظات", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1, xSplit: 2 }] });
+  setupTableSheet(ws, REC_COLS);
+  const photoCol = REC_COLS.findIndex(c => c.h === "الصورة");
+
+  // الحبات مرتبة حسب أول ملاحظة عليها، وملاحظات كل حبة ورا بعض
+  const units = S.unitList.slice().sort((a, b) => (a.first || 0) - (b.first || 0));
+  let rowIdx = 2, n = 1;
+  units.forEach((u, ui) => {
+    u.items.forEach((r, k) => {
+      const d = toDateSafe(r.createdAt), cd = toDateSafe(r.closedAt);
+      const isClosed = r.status === "مغلقة";
+      const age = isClosed ? (cd && d ? Math.max(0, Math.round((cd - d) / DAY_MS)) : null) : S.ageOf(r);
+      const vals = [
+        n++, r.recordId || "", xlDate(d), fmtTime(d), deptLabel(r.dept), r.jobOrder || "", r.serialNumber || "",
+        `${k + 1} من ${u.items.length}`, r.issueType || "", r.description || "", null, r.status || "مفتوحة",
+        age, r.owner || "", r.action || "", parseFloat(r.downtime) || 0, r.reporterName || "", isClosed ? xlDate(cd) : null
+      ];
+      const row = ws.getRow(rowIdx);
+      const groupFill = ui % 2 ? XL.groupFill : null;
+      vals.forEach((v, i) => {
+        const c = row.getCell(i + 1);
+        c.value = v;
+        const center = !["وصف الملاحظة", "الإجراء المتخذ"].includes(REC_COLS[i].h);
+        styleBodyCell(c, { h: center ? "center" : "right", fmt: REC_COLS[i].fmt, fill: groupFill });
+      });
+      const sc = row.getCell(12);
+      sc.fill = fill(statusFill(r.status));
+      sc.font = { name: XL_FONT, bold: true, size: 10.5 };
+      if (u.items.length > 1) row.getCell(8).font = { name: XL_FONT, bold: true, color: { argb: XL.deep } };
+      if (!isClosed && age >= LATE_DAYS) row.getCell(13).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+
+      const info = photos.get(r.id);
+      if (info) {
+        placePhoto(ws, info, photoCol, rowIdx - 1, PHOTO_MAX[0], PHOTO_MAX[1]);
+        row.height = PHOTO_ROW_PT;
+      } else {
+        photoCellFallback(row.getCell(photoCol + 1), r);
+        const len = Math.max((r.description || "").length, (r.action || "").length * 1.25);
+        row.height = Math.min(100, Math.max(30, Math.ceil(len / 48) * 15 + 8));
+      }
+      rowIdx++;
+    });
+  });
+}
+
+function buildUnitsSheet(wb, S){
+  const cols = [
+    { h: "#", w: 5 }, { h: "رقم أمر الشغل", w: 14 }, { h: "S/N", w: 14 }, { h: "القسم", w: 12 },
+    { h: "عدد الملاحظات", w: 11, fmt: "0" }, { h: "مفتوحة", w: 9, fmt: "0" }, { h: "مغلقة", w: 9, fmt: "0" },
+    { h: "ساعات التوقف", w: 10, fmt: "0.0" }, { h: "أنواع المشاكل", w: 24 }, { h: "أول ملاحظة", w: 12, fmt: "dd/mm/yyyy" },
+    { h: "آخر ملاحظة", w: 12, fmt: "dd/mm/yyyy" }, { h: "أرقام السجلات", w: 30 }, { h: "ملخص الملاحظات", w: 60 },
+  ];
+  const ws = wb.addWorksheet("حسب الحبة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }] });
+  setupTableSheet(ws, cols);
+  S.unitList.forEach((u, i) => {
+    const types = sortedEntries(countByFn(u.items, r => r.issueType)).map(([k, v]) => `${k} (${v})`).join("، ");
+    const summary = u.items.map((r, k) => `${k + 1}) ${r.description || ""}`).join("\n");
+    const vals = [
+      i + 1, u.jobOrder || "", u.serial || "", u.dept, u.items.length, u.open, u.items.length - u.open,
+      round1(u.downtime), types, xlDate(u.first), xlDate(u.last), u.items.map(r => r.recordId || "").join("\n"), summary
+    ];
+    const row = ws.getRow(i + 2);
+    vals.forEach((v, j) => {
+      const c = row.getCell(j + 1);
+      c.value = v;
+      styleBodyCell(c, { h: j >= 11 ? "right" : "center", fmt: cols[j].fmt, fill: u.items.length > 1 ? XL.wipFill : null });
+    });
+    if (u.open) row.getCell(6).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+    row.height = Math.min(160, Math.max(24, u.items.length * 16 + 8));
+  });
+}
+
+function buildOpenSheet(wb, S, photos){
+  const cols = [
+    { h: "#", w: 5 }, { h: "رقم السجل", w: 20 }, { h: "تاريخ التسجيل", w: 12, fmt: "dd/mm/yyyy" },
+    { h: "العمر (يوم)", w: 9, fmt: "0" }, { h: "القسم", w: 12 }, { h: "رقم أمر الشغل", w: 13 }, { h: "S/N", w: 13 },
+    { h: "نوع المشكلة", w: 12 }, { h: "وصف الملاحظة", w: 42 }, { h: "الصورة", w: 25 }, { h: "الحالة", w: 12 },
+    { h: "المسؤول", w: 16 }, { h: "الإجراء المتخذ / المطلوب", w: 34 },
+  ];
+  const ws = wb.addWorksheet("المفتوحة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }] });
+  setupTableSheet(ws, cols);
+  if (!S.openAged.length) {
+    ws.mergeCells(2, 1, 2, cols.length);
+    const c = ws.getCell(2, 1);
+    c.value = "ما في ملاحظات مفتوحة بهالفترة";
+    styleBodyCell(c, { h: "center", fill: XL.okFill });
+    ws.getRow(2).height = 28;
     return;
   }
-  if (typeof XLSX === "undefined") {
+  S.openAged.forEach(({ r, age }, i) => {
+    const d = toDateSafe(r.createdAt);
+    const late = age >= LATE_DAYS;
+    const vals = [
+      i + 1, r.recordId || "", xlDate(d), age, deptLabel(r.dept), r.jobOrder || "", r.serialNumber || "",
+      r.issueType || "", r.description || "", null, r.status || "مفتوحة", r.owner || "— غير محدد —", r.action || ""
+    ];
+    const row = ws.getRow(i + 2);
+    vals.forEach((v, j) => {
+      const c = row.getCell(j + 1);
+      c.value = v;
+      styleBodyCell(c, { h: [8, 12].includes(j) ? "right" : "center", fmt: cols[j].fmt });
+    });
+    row.getCell(11).fill = fill(statusFill(r.status));
+    if (late) { row.getCell(4).fill = fill(XL.openFill); row.getCell(4).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } }; }
+    if (!r.owner) row.getCell(12).font = { name: XL_FONT, italic: true, color: { argb: XL.danger } };
+    const info = photos.get(r.id);
+    if (info) { placePhoto(ws, info, 9, i + 1, PHOTO_MAX[0], PHOTO_MAX[1]); row.height = PHOTO_ROW_PT; }
+    else { photoCellFallback(row.getCell(10), r); row.height = 34; }
+  });
+}
+
+exportExcelBtn.addEventListener("click", exportExcelReport);
+
+async function exportExcelReport(){
+  const list = getRecordsInRange();
+  if (list.length === 0) { showToast("ما في سجلات بهاي الفترة عشان نصدّرها", "err"); return; }
+  if (typeof ExcelJS === "undefined") {
     showToast("تعذّر تحميل مكتبة Excel، تأكد من الاتصال بالإنترنت وحاول مرة أخرى", "err");
     return;
   }
+  const btnText = exportExcelBtn.textContent;
+  exportExcelBtn.disabled = true;
+  exportExcelBtn.textContent = "⏳ جاري تجهيز التقرير...";
+  try {
+    renderAnalysisSummary(); // نتأكد إن الرسوم محدّثة قبل ما ناخد صورتها
+    const S = computeStats(list);
+    const now = new Date();
+    const meta = {
+      from: analysisFrom.value, to: analysisTo.value,
+      generated: `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${fmtTime(now)}`,
+      by: chatIdentitySel.value || ""
+    };
+    const wb = new ExcelJS.Workbook();
+    wb.creator = meta.by || XL_TEAM;
+    wb.created = now;
+    const photos = await registerPhotos(wb, list);
+    buildSummarySheet(wb, S, meta, captureCharts());
+    buildRecordsSheet(wb, S, photos);
+    buildUnitsSheet(wb, S);
+    buildOpenSheet(wb, S, photos);
 
-  // ---- صفحة 1: السجلات بالتفصيل ----
-  const rows = list
-    .slice()
-    .sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0))
-    .map(r => {
-      const d = r.createdAt && r.createdAt.toDate ? r.createdAt.toDate() : null;
-      return {
-        "رقم السجل": r.recordId || "",
-        "التاريخ": d ? d.toLocaleDateString("en-GB") : "",
-        "الوقت": d ? d.toLocaleTimeString("en-GB") : "",
-        "القسم": r.dept || "",
-        "رقم أمر الشغل": r.jobOrder || "",
-        "الرقم التسلسلي (S/N)": r.serialNumber || "",
-        "نوع المشكلة": r.issueType || "",
-        "الوصف": r.description || "",
-        "ساعات التوقف": r.downtime || 0,
-        "الإجراء المتخذ": r.action || "",
-        "المسؤول": r.owner || "",
-        "الحالة": r.status || "",
-        "المسجّل": r.reporterName || "",
-      };
-    });
-  const sheetRecords = XLSX.utils.json_to_sheet(rows);
-
-  // ---- صفحة 2: تحليل ملخّص لنفس الفترة ----
-  const totalDowntime = list.reduce((sum, r) => sum + (parseFloat(r.downtime) || 0), 0);
-  const byDept   = countBy(list, "dept");
-  const byType   = countBy(list, "issueType");
-  const byStatus = countBy(list, "status");
-
-  const aoa = [
-    ["تحليل ملخّص — من", analysisFrom.value, "إلى", analysisTo.value],
-    [],
-    ["إجمالي عدد الملاحظات", list.length],
-    ["إجمالي ساعات التوقف", totalDowntime],
-    ["متوسط ساعات التوقف لكل ملاحظة", list.length ? +(totalDowntime / list.length).toFixed(2) : 0],
-    [],
-    ["حسب القسم"],
-    ...Object.entries(byDept).sort((a, b) => b[1] - a[1]),
-    [],
-    ["حسب نوع المشكلة"],
-    ...Object.entries(byType).sort((a, b) => b[1] - a[1]),
-    [],
-    ["حسب الحالة"],
-    ...Object.entries(byStatus).sort((a, b) => b[1] - a[1]),
-  ];
-  const sheetAnalysis = XLSX.utils.aoa_to_sheet(aoa);
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheetRecords, "السجلات");
-  XLSX.utils.book_append_sheet(wb, sheetAnalysis, "التحليل");
-
-  const fileName = `سجلات P2-H3 (${analysisFrom.value} الى ${analysisTo.value}).xlsx`;
-  XLSX.writeFile(wb, fileName);
-});
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `تقرير ملاحظات Electrical Panel (${meta.from} الى ${meta.to}).xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    showToast(`تم تجهيز التقرير — ${list.length} ملاحظة، ${photos.size} صورة`, "ok");
+  } catch (err) {
+    console.error(err);
+    showToast("صار خطأ أثناء تجهيز التقرير، حاول مرة أخرى", "err");
+  } finally {
+    exportExcelBtn.disabled = false;
+    exportExcelBtn.textContent = btnText;
+  }
+}
 
 /* =====================================================================
    9) نافذة تكبير الصورة
