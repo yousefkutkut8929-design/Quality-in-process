@@ -97,6 +97,7 @@
   .theirs .bubble{ background:#fff; border:1px solid var(--line); color:var(--text); }
   .bubble .text{ white-space:pre-wrap; word-break:break-word; }
   .bubble .time{ font-size:10px; opacity:.65; margin-top:4px; display:block; }
+  .msg-del{ background:none; border:none; color:inherit; font-family:inherit; font-size:10.5px; font-weight:700; text-decoration:underline; cursor:pointer; padding:0 8px; opacity:.9; }
   .bubble .chat-photo{ max-width:100%; border-radius:10px; display:block; margin-bottom:6px; cursor:pointer; }
 
   /* ===== Observation card (inline in feed) ===== */
@@ -1278,7 +1279,7 @@ function rebuildFeed(){
 
 if (firebaseReady) {
   db.collection(CHAT_COLLECTION).orderBy("createdAt", "desc").limit(200).onSnapshot((snap) => {
-    chatMsgs = snap.docs.map(d => d.data());
+    chatMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     rebuildFeed();
   }, (err) => console.error(err));
 
@@ -1346,7 +1347,7 @@ function renderFeed(list){
           ${!mine ? `<span class="sender">${escapeHtml(m.sender)}</span>` : ""}
           ${m.photoUrl ? `<img class="chat-photo" src="${m.photoUrl}" alt="صورة" onclick="openImage('${m.photoUrl}')">` : ""}
           ${m.text ? `<span class="text">${escapeHtml(m.text)}</span>` : ""}
-          <span class="time">${time}</span>
+          <span class="time">${time}<button type="button" class="msg-del" onclick="deleteChatMsg('${m.id}')">🗑️ حذف</button></span>
         </div>
       </div>`;
   }).join("");
@@ -1354,6 +1355,24 @@ function renderFeed(list){
   const wrap = document.getElementById("feedWrap");
   wrap.scrollTop = wrap.scrollHeight;
   window.scrollTo(0, document.body.scrollHeight);
+}
+
+/* حذف رسالة من المحادثة: رسالتك بتحذفها مباشرة، ورسالة غيرك بدها كلمة سر المسؤول */
+function deleteChatMsg(id){
+  const m = chatMsgs.find(x => x.id === id);
+  if (!m) return;
+  const doDelete = async () => {
+    if (!confirm("متأكد إنك بدك تحذف هالرسالة؟ ما بتقدر ترجعها.")) return;
+    try {
+      await db.collection(CHAT_COLLECTION).doc(id).delete();
+      showToast("تم حذف الرسالة", "ok");
+    } catch (err) {
+      console.error(err);
+      showToast("تعذّر حذف الرسالة، تحقق من الاتصال", "err");
+    }
+  };
+  if (m.sender && m.sender === chatIdentitySel.value) doDelete();
+  else requestAdmin(doDelete);
 }
 
 function escapeHtml(str){
