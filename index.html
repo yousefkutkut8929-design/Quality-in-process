@@ -148,6 +148,11 @@
 
   .quick-fields-row{ display:none; grid-template-columns:1fr 1fr; gap:8px; padding:10px 14px 0; }
   .quick-fields-row.show{ display:grid; }
+  .mc-field{ grid-column:1 / -1; display:flex; align-items:center; gap:8px; background:#F4F7F9; border:1.5px solid var(--line); border-radius:10px; padding:4px 10px; }
+  .mc-field span{ flex:1; font-size:13px; font-weight:700; color:var(--navy); }
+  .mc-field button{ width:34px; height:34px; border:none; border-radius:8px; background:var(--deep); color:#fff; font-size:18px; font-weight:700; cursor:pointer; flex-shrink:0; }
+  .quick-fields-row .mc-field input{ width:58px; text-align:center; font-weight:800; font-size:16px; padding:6px 4px; }
+  .mc-badge{ display:inline-block; font-size:11px; font-weight:800; color:#fff; background:var(--amber-dark); padding:2px 9px; border-radius:20px; margin-inline-start:6px; }
   .quick-fields-row select, .quick-fields-row input{
     min-width:0; font-size:12.5px; padding:9px 8px;
     border:1.5px solid var(--line); border-radius:9px; direction:rtl; font-family:inherit; background:#fff;
@@ -289,6 +294,33 @@
   .modal-actions .cancel{ background:#EEF2F4; color:var(--muted); }
   .modal-actions .confirm{ background:var(--deep); color:#fff; }
 
+  /* ===== Production receiving tracker ===== */
+  main.wide{ max-width:1100px; }
+  .prod-stats{ display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:12px; }
+  .prod-stats .stat-box .num{ font-size:20px; }
+  .prod-table-wrap{ direction:ltr; overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:12px; -webkit-overflow-scrolling:touch; }
+  .prod-table{ width:100%; border-collapse:collapse; direction:ltr; font-size:13px; min-width:720px; }
+  .prod-table th{ background:var(--navy); color:#fff; font-weight:700; padding:9px 8px; text-align:center; white-space:nowrap; position:sticky; top:0; }
+  .prod-table td{ padding:8px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap; }
+  .prod-table td.model{ text-align:left; }
+  .prod-table td.proj{ font-weight:800; color:var(--deep); cursor:pointer; }
+  .prod-table th.qc, .prod-table td.qc{ position:sticky; right:0; background:inherit; box-shadow:-1px 0 0 var(--line); }
+  .prod-table th.qc{ background:var(--navy); }
+  .prod-table tr{ background:#fff; }
+  .prod-table tr.checked{ background:#DDF1E4; }
+  .prod-table tr.checked td{ color:#14532D; }
+  .prod-table td.late{ color:var(--danger); font-weight:800; }
+  .prod-table td.today{ color:var(--amber-dark); font-weight:800; }
+  .qc-box{ width:24px; height:24px; accent-color:#1E7A4C; cursor:pointer; vertical-align:middle; }
+  .qc-by{ display:block; font-size:9.5px; color:var(--muted); margin-top:2px; }
+  .prod-more{ display:block; width:100%; padding:11px; border:1.5px dashed var(--line); background:#fff; border-radius:10px; font-family:inherit; font-weight:700; color:var(--deep); cursor:pointer; margin-bottom:20px; }
+  .prod-proj-head td{ background:#EEF3F5 !important; font-weight:800; color:var(--navy); text-align:left !important; }
+  @media (max-width:480px){
+    .prod-stats{ grid-template-columns:repeat(2, 1fr); }
+    .prod-table{ font-size:12px; min-width:620px; }
+    .prod-table td, .prod-table th{ padding:7px 5px; }
+  }
+
   /* ===== Header settings button ===== */
   header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
   .header-text{ min-width:0; }
@@ -348,6 +380,7 @@
   <button id="tabChatBtn" class="active">المحادثة</button>
   <button id="tabListBtn">السجلات</button>
   <button id="tabAnalysisBtn">التحليل</button>
+  <button id="tabProdBtn">الاستلام</button>
 </nav>
 
 <main>
@@ -469,6 +502,43 @@
     </div>
   </div>
 
+  <!-- ============================================================
+       View 4: متابعة استلام الماكنات من قسم اللوحات (جدول الإنتاج)
+       ============================================================ -->
+  <div id="viewProd" class="view">
+    <div class="card">
+      <div class="section-title">متابعة استلام الماكنات — جدول الإنتاج</div>
+      <div id="prodMeta" class="hint" style="margin-bottom:10px;">جاري التحميل...</div>
+      <button type="button" class="btn-primary" id="prodUploadBtn">📤 رفع / تحديث جدول الإنتاج (Excel)</button>
+      <input type="file" id="prodFileInput" accept=".xlsx,.xls,.xlsm" style="display:none;">
+      <div class="hint" style="margin-top:8px;">كل ما يطلع جدول Master Production جديد ارفعه هون — الجدول بيتحدّث لحاله، وتشييكات QC بتضل محفوظة لكل سطر (المشروع + Item + Sub).</div>
+    </div>
+
+    <div class="prod-stats" id="prodStats"></div>
+
+    <input type="search" id="prodSearch" class="search-box" inputmode="numeric" placeholder="🔍 ابحث برقم المشروع (Project) أو الموديل">
+    <div class="seg" id="prodFilterSeg">
+      <button type="button" data-f="all" class="active">الكل</button>
+      <button type="button" data-f="pending">مش مستلمة</button>
+      <button type="button" data-f="late">متأخرة</button>
+      <button type="button" data-f="checked">مستلمة ✓</button>
+    </div>
+    <div id="prodCount" class="rec-count"></div>
+
+    <div class="prod-table-wrap">
+      <table class="prod-table">
+        <thead>
+          <tr>
+            <th>Project</th><th>Item Number</th><th>Sub Item</th><th>Model Type</th><th>QTY</th>
+            <th>finish in Elec. Panel</th><th>Assembly Start</th><th class="qc">QC check</th>
+          </tr>
+        </thead>
+        <tbody id="prodBody"></tbody>
+      </table>
+    </div>
+    <button type="button" class="prod-more" id="prodMoreBtn" style="display:none;">عرض المزيد</button>
+  </div>
+
 </main>
 
 <!-- ============================================================
@@ -495,6 +565,12 @@
     <input type="text" id="quickJobOrder" inputmode="numeric" placeholder="رقم أمر الشغل">
     <select id="quickIssueType"></select>
     <input type="text" id="quickSerial" placeholder="S/N (اختياري)">
+    <div class="mc-field">
+      <span>عدد الماكنات اللي عليها نفس الملاحظة</span>
+      <button type="button" id="mcMinus" aria-label="أقل">−</button>
+      <input type="number" id="quickMachines" min="1" step="1" inputmode="numeric" value="1">
+      <button type="button" id="mcPlus" aria-label="أكثر">+</button>
+    </div>
   </div>
 
   <div class="composer-main-row">
@@ -543,6 +619,17 @@
     <select id="chatIdentity" data-placeholder="اختر اسمك"></select>
     <div class="modal-actions">
       <button type="button" class="cancel" id="identityModalCancel">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="prodConfirmModal">
+  <div class="modal-box">
+    <h3>تحديث جدول الإنتاج</h3>
+    <p class="sub" id="prodConfirmText"></p>
+    <div class="modal-actions">
+      <button type="button" class="cancel" id="prodConfirmCancel">إلغاء</button>
+      <button type="button" class="confirm" id="prodConfirmOk">اعتماد التحديث</button>
     </div>
   </div>
 </div>
@@ -603,6 +690,9 @@
     <label>الرقم التسلسلي (S/N)</label>
     <input type="text" id="editSerial" placeholder="مثلاً 0101001">
 
+    <label>عدد الماكنات اللي عليها الملاحظة</label>
+    <input type="number" id="editMachines" min="1" step="1" inputmode="numeric">
+
     <div class="modal-actions">
       <button type="button" class="cancel" id="editRecordCancel">إلغاء</button>
       <button type="button" class="confirm" id="editRecordConfirm">حفظ التحديث</button>
@@ -630,6 +720,8 @@ const firebaseConfig = {
 const OBS_COLLECTION   = "p2h3_observations";
 const NAMES_COLLECTION = "p2h3_names";
 const CHAT_COLLECTION  = "p2h3_chat";
+const SCHEDULE_COLLECTION = "p2h3_schedule"; // جدول الإنتاج (مقسوم على كم مستند)
+const QC_COLLECTION       = "p2h3_qc";       // تشييك QC لكل سطر بجدول الإنتاج
 const IDENTITY_KEY     = "p2h3_identity";
 
 let db = null, firebaseReady = false;
@@ -660,6 +752,9 @@ const composer       = document.getElementById("composer");
 tabChatBtn.addEventListener("click", () => switchTab("chat"));
 tabListBtn.addEventListener("click", () => switchTab("list"));
 tabAnalysisBtn.addEventListener("click", () => switchTab("analysis"));
+const tabProdBtn = document.getElementById("tabProdBtn");
+const viewProd   = document.getElementById("viewProd");
+tabProdBtn.addEventListener("click", () => switchTab("prod"));
 
 function switchTab(name){
   tabChatBtn.classList.toggle("active", name === "chat");
@@ -668,6 +763,10 @@ function switchTab(name){
   viewChat.classList.toggle("active", name === "chat");
   viewList.classList.toggle("active", name === "list");
   viewAnalysis.classList.toggle("active", name === "analysis");
+  tabProdBtn.classList.toggle("active", name === "prod");
+  viewProd.classList.toggle("active", name === "prod");
+  document.querySelector("main").classList.toggle("wide", name === "prod");
+  if (name === "prod") initProduction();
   composer.classList.toggle("show", name === "chat");
   if (name === "chat") {
     setTimeout(() => {
@@ -1094,6 +1193,12 @@ const quickDept      = document.getElementById("quickDept");
 const quickJobOrder  = document.getElementById("quickJobOrder");
 const quickIssueType = document.getElementById("quickIssueType");
 const quickSerial    = document.getElementById("quickSerial");
+const quickMachines  = document.getElementById("quickMachines");
+// عدد الماكنات (نفس الملاحظة مكررة على أكثر من ماكنة من نفس الأيتم)
+function machinesOf(r){ return Math.max(1, parseInt(r && r.machineCount, 10) || 1); }
+function readMachines(el){ return Math.max(1, Math.min(999, parseInt(el.value, 10) || 1)); }
+document.getElementById("mcMinus").addEventListener("click", () => { quickMachines.value = Math.max(1, readMachines(quickMachines) - 1); });
+document.getElementById("mcPlus").addEventListener("click",  () => { quickMachines.value = readMachines(quickMachines) + 1; });
 const composerText   = document.getElementById("composerText");
 const sendBtn        = document.getElementById("sendBtn");
 
@@ -1145,7 +1250,7 @@ function updatePinnedUnit(){
 }
 function clearUnitFields(){
   unitPinned = false;
-  quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = ""; quickSerial.value = "";
+  quickDept.value = ""; quickJobOrder.value = ""; quickIssueType.value = ""; quickSerial.value = ""; quickMachines.value = 1;
   setLogMode(logMode);
 }
 document.getElementById("newUnitBtn").addEventListener("click", clearUnitFields);
@@ -1206,6 +1311,7 @@ async function handleSend(){
     const jobOrder = quickJobOrder.value.trim();
     const issueType = quickIssueType.value;
     const serialNumber = quickSerial.value.trim();
+    const machineCount = readMachines(quickMachines);
     const description = composerText.value.trim();
 
     if (!dept || !jobOrder || !issueType || !description) {
@@ -1219,7 +1325,7 @@ async function handleSend(){
       await db.collection(OBS_COLLECTION).add({
         recordId,
         reporterName: identity,
-        dept, jobOrder, issueType, serialNumber, description,
+        dept, jobOrder, issueType, serialNumber, machineCount, description,
         downtime: 0,
         action: "",
         owner: "",
@@ -1230,6 +1336,7 @@ async function handleSend(){
       showToast(`تم حفظ الملاحظة ${recordId} — بتقدر تضيف ملاحظة ثانية على نفس الحبة`, "ok");
       // نخلي بيانات الحبة (القسم + أمر الشغل + S/N) مثبتة، ونفرّغ نوع المشكلة والوصف والصورة فقط
       quickIssueType.value = "";
+      quickMachines.value = 1;
       clearComposer();
       unitPinned = true;
       setLogMode(true);
@@ -1332,7 +1439,7 @@ function renderFeed(list){
             <span class="badge ${statusBadgeClass(m.status)}">${m.status}</span>
           </div>
           <div class="obs-id">${m.recordId || ""}${m.serialNumber ? ` · S/N: ${escapeHtml(m.serialNumber)}` : ""}</div>
-          <div class="obs-dept">${escapeHtml(deptLabel(m.dept))} — أمر شغل ${escapeHtml(m.jobOrder)} · ${escapeHtml(m.issueType)}</div>
+          <div class="obs-dept">${escapeHtml(deptLabel(m.dept))} — أمر شغل ${escapeHtml(m.jobOrder)} · ${escapeHtml(m.issueType)}${machinesOf(m) > 1 ? `<span class="mc-badge">× ${machinesOf(m)} ماكنات</span>` : ""}</div>
           <div class="obs-desc">${escapeHtml(m.description)}</div>
           ${m.photoUrl ? `<img class="obs-photo" src="${m.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${m.photoUrl}')">` : ""}
           <div class="obs-meta">${escapeHtml(m.reporterName)} · ${time}</div>
@@ -1445,7 +1552,7 @@ function renderRecords(){
           <span class="rec-id">${r.recordId || ""}${r.serialNumber ? ` · S/N: ${escapeHtml(r.serialNumber)}` : ""}</span>
           <span class="badge ${statusBadgeClass(r.status)}">${r.status}</span>
         </div>
-        <div class="rec-dept">${escapeHtml(deptLabel(r.dept))} — أمر شغل ${escapeHtml(r.jobOrder)}</div>
+        <div class="rec-dept">${escapeHtml(deptLabel(r.dept))} — أمر شغل ${escapeHtml(r.jobOrder)}${machinesOf(r) > 1 ? `<span class="mc-badge">× ${machinesOf(r)} ماكنات</span>` : ""}</div>
         ${uc > 1 ? `<span class="unit-badge" onclick="filterByUnit('${r.id}')">🔁 الحبة عليها ${uc} ملاحظات — اعرضها</span>` : ""}
         <div class="rec-desc">${escapeHtml(r.description)}</div>
         <div class="rec-meta">
@@ -1526,6 +1633,7 @@ const editOwner         = document.getElementById("editOwner");
 const editAction        = document.getElementById("editAction");
 const editDowntime      = document.getElementById("editDowntime");
 const editSerial        = document.getElementById("editSerial");
+const editMachines      = document.getElementById("editMachines");
 const editRecordCancel  = document.getElementById("editRecordCancel");
 const editRecordConfirm = document.getElementById("editRecordConfirm");
 let editingRecordId = null;
@@ -1539,6 +1647,7 @@ function openEditRecord(id){
   editAction.value = record.action || "";
   editDowntime.value = record.downtime || 0;
   editSerial.value = record.serialNumber || "";
+  editMachines.value = machinesOf(record);
   const ownerNames = [...allNames];
   if (record.owner && !ownerNames.includes(record.owner)) ownerNames.push(record.owner); // مسؤول انشال من القائمة
   editOwner.innerHTML = `<option value="">بدون تحديد</option>` +
@@ -1564,6 +1673,7 @@ editRecordConfirm.addEventListener("click", async () => {
       owner: editOwner.value,
       downtime: parseFloat(editDowntime.value) || 0,
       serialNumber: editSerial.value.trim(),
+      machineCount: readMachines(editMachines),
     };
     // تاريخ الإغلاق: بيلزم لحساب "متوسط أيام الإغلاق" وعمر الملاحظات بالتقرير
     if (upd.status === "مغلقة" && record.status !== "مغلقة") {
@@ -1670,6 +1780,9 @@ function computeStats(list){
   const openByDept = countByFn(list.filter(r => r.status !== "مغلقة"), r => deptLabel(r.dept));
   const downtimeByDept = sumByFn(list, r => deptLabel(r.dept), dt);
   const totalDowntime = list.reduce((s, r) => s + dt(r), 0);
+  const totalMachines = list.reduce((s, r) => s + machinesOf(r), 0);
+  const machinesByDept = sumByFn(list, r => deptLabel(r.dept), machinesOf);
+  const machinesByType = sumByFn(list, r => r.issueType, machinesOf);
 
   const closed   = list.filter(r => r.status === "مغلقة");
   const openList = list.filter(r => r.status !== "مغلقة");
@@ -1697,6 +1810,7 @@ function computeStats(list){
     u.items.sort((a, b) => tsMillis(a.createdAt) - tsMillis(b.createdAt));
     u.open = u.items.filter(r => r.status !== "مغلقة").length;
     u.downtime = u.items.reduce((s, r) => s + dt(r), 0);
+    u.machines = Math.max(...u.items.map(machinesOf)); // أكبر عدد ماكنات انذكر على هالحبة/الأيتم
     u.first = toDateSafe(u.items[0].createdAt);
     u.last  = toDateSafe(u.items[u.items.length - 1].createdAt);
     u.dept  = deptLabel(u.items[0].dept);
@@ -1710,6 +1824,7 @@ function computeStats(list){
 
   return {
     total, byDept, byType, byStatus, byReporter, openByDept, downtimeByDept, totalDowntime,
+    totalMachines, machinesByDept, machinesByType,
     closed, openList, closureRate: pct(closed.length, total), avgCloseDays,
     openAged, lateOpen, unitList, repeatUnits, pareto, ageOf
   };
@@ -1718,6 +1833,7 @@ function computeStats(list){
 function buildFindings(S){
   const f = [];
   if (!S.total) return f;
+  if (S.totalMachines > S.total) f.push(`الـ ${S.total} ملاحظة طالعة على ${S.totalMachines} ماكنة (في ملاحظات مكررة على أكثر من ماكنة من نفس الأيتم).`);
   const topDept = sortedEntries(S.byDept)[0];
   if (topDept) f.push(`القسم الأعلى بالملاحظات: ${topDept[0]} — ${topDept[1]} ملاحظة (${fmtPct(pct(topDept[1], S.total))} من الإجمالي).`);
   const p = S.pareto;
@@ -1772,7 +1888,7 @@ function renderAnalysisSummary(){
 
   document.getElementById("statGrid").innerHTML = `
     <div class="stat-box"><div class="num">${S.total}</div><div class="lbl">عدد الملاحظات</div></div>
-    <div class="stat-box"><div class="num">${S.unitList.length}</div><div class="lbl">حبات عليها ملاحظات</div></div>
+    <div class="stat-box"><div class="num">${S.totalMachines}</div><div class="lbl">الماكنات المتأثرة</div></div>
     <div class="stat-box"><div class="num">${fmtPct(S.closureRate)}</div><div class="lbl">نسبة الإغلاق</div></div>
     <div class="stat-box"><div class="num">${S.openList.length}</div><div class="lbl">لسا مفتوحة</div></div>
     <div class="stat-box"><div class="num">${round1(S.totalDowntime)}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
@@ -2003,7 +2119,7 @@ function buildSummarySheet(wb, S, meta, charts){
   r++;
   const kpis = [
     [S.total, "إجمالي الملاحظات", "0"],
-    [S.unitList.length, "حبات عليها ملاحظات", "0"],
+    [S.totalMachines, "الماكنات المتأثرة", "0"],
     [S.closureRate, "نسبة الإغلاق", "0%"],
     [S.openList.length, "ملاحظات لسا مفتوحة", "0", S.openList.length ? XL.danger : null],
     [round1(S.totalDowntime), "إجمالي ساعات التوقف", "0.0"],
@@ -2053,13 +2169,13 @@ function buildSummarySheet(wb, S, meta, charts){
   // ---- الجداول ----
   const T = S.total;
   r = writeTable(ws, r, "حسب القسم",
-    ["القسم", "عدد الملاحظات", "النسبة", "مفتوحة", "ساعات التوقف"],
-    sortedEntries(S.byDept).map(([k, v]) => [k, v, pct(v, T), S.openByDept[k] || 0, round1(S.downtimeByDept[k])]),
-    [null, "0", "0%", "0", "0.0"]);
+    ["القسم", "عدد الملاحظات", "الماكنات المتأثرة", "النسبة", "مفتوحة", "ساعات التوقف"],
+    sortedEntries(S.byDept).map(([k, v]) => [k, v, S.machinesByDept[k] || 0, pct(v, T), S.openByDept[k] || 0, round1(S.downtimeByDept[k])]),
+    [null, "0", "0", "0%", "0", "0.0"]);
   r = writeTable(ws, r, "باريتو أنواع المشاكل",
-    ["نوع المشكلة", "العدد", "النسبة", "النسبة التراكمية"],
-    S.pareto.map(x => [x.k, x.v, x.p, x.cum]),
-    [null, "0", "0%", "0%"]);
+    ["نوع المشكلة", "العدد", "الماكنات المتأثرة", "النسبة", "النسبة التراكمية"],
+    S.pareto.map(x => [x.k, x.v, S.machinesByType[x.k] || 0, x.p, x.cum]),
+    [null, "0", "0", "0%", "0%"]);
   r = writeTable(ws, r, "حسب الحالة",
     ["الحالة", "العدد", "النسبة"],
     sortedEntries(S.byStatus).map(([k, v]) => [k, v, pct(v, T)]),
@@ -2093,6 +2209,7 @@ const REC_COLS = [
   { h: "القسم",                   w: 12 },
   { h: "رقم أمر الشغل",           w: 13 },
   { h: "S/N",                     w: 13 },
+  { h: "عدد الماكنات",            w: 9, fmt: "0" },
   { h: "ترتيبها على الحبة",       w: 11 },
   { h: "نوع المشكلة",             w: 12 },
   { h: "وصف الملاحظة",            w: 42 },
@@ -2142,7 +2259,7 @@ function buildRecordsSheet(wb, S, photos){
       const age = isClosed ? (cd && d ? Math.max(0, Math.round((cd - d) / DAY_MS)) : null) : S.ageOf(r);
       const vals = [
         n++, r.recordId || "", xlDate(d), fmtTime(d), deptLabel(r.dept), r.jobOrder || "", r.serialNumber || "",
-        `${k + 1} من ${u.items.length}`, r.issueType || "", r.description || "", null, r.status || "مفتوحة",
+        machinesOf(r), `${k + 1} من ${u.items.length}`, r.issueType || "", r.description || "", null, r.status || "مفتوحة",
         age, r.owner || "", r.action || "", parseFloat(r.downtime) || 0, r.reporterName || "", isClosed ? xlDate(cd) : null
       ];
       const row = ws.getRow(rowIdx);
@@ -2153,11 +2270,13 @@ function buildRecordsSheet(wb, S, photos){
         const center = !["وصف الملاحظة", "الإجراء المتخذ"].includes(REC_COLS[i].h);
         styleBodyCell(c, { h: center ? "center" : "right", fmt: REC_COLS[i].fmt, fill: groupFill });
       });
-      const sc = row.getCell(12);
+      const col = (h) => row.getCell(REC_COLS.findIndex(c => c.h === h) + 1);
+      const sc = col("الحالة");
       sc.fill = fill(statusFill(r.status));
       sc.font = { name: XL_FONT, bold: true, size: 10.5 };
-      if (u.items.length > 1) row.getCell(8).font = { name: XL_FONT, bold: true, color: { argb: XL.deep } };
-      if (!isClosed && age >= LATE_DAYS) row.getCell(13).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+      if (u.items.length > 1) col("ترتيبها على الحبة").font = { name: XL_FONT, bold: true, color: { argb: XL.deep } };
+      if (machinesOf(r) > 1) { col("عدد الماكنات").fill = fill(XL.wipFill); col("عدد الماكنات").font = { name: XL_FONT, bold: true }; }
+      if (!isClosed && age >= LATE_DAYS) col("العمر / مدة الإغلاق (يوم)").font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
 
       const info = photos.get(r.id);
       if (info) {
@@ -2176,7 +2295,7 @@ function buildRecordsSheet(wb, S, photos){
 function buildUnitsSheet(wb, S){
   const cols = [
     { h: "#", w: 5 }, { h: "رقم أمر الشغل", w: 14 }, { h: "S/N", w: 14 }, { h: "القسم", w: 12 },
-    { h: "عدد الملاحظات", w: 11, fmt: "0" }, { h: "مفتوحة", w: 9, fmt: "0" }, { h: "مغلقة", w: 9, fmt: "0" },
+    { h: "عدد الملاحظات", w: 11, fmt: "0" }, { h: "عدد الماكنات", w: 9, fmt: "0" }, { h: "مفتوحة", w: 9, fmt: "0" }, { h: "مغلقة", w: 9, fmt: "0" },
     { h: "ساعات التوقف", w: 10, fmt: "0.0" }, { h: "أنواع المشاكل", w: 24 }, { h: "أول ملاحظة", w: 12, fmt: "dd/mm/yyyy" },
     { h: "آخر ملاحظة", w: 12, fmt: "dd/mm/yyyy" }, { h: "أرقام السجلات", w: 30 }, { h: "ملخص الملاحظات", w: 60 },
   ];
@@ -2186,16 +2305,16 @@ function buildUnitsSheet(wb, S){
     const types = sortedEntries(countByFn(u.items, r => r.issueType)).map(([k, v]) => `${k} (${v})`).join("، ");
     const summary = u.items.map((r, k) => `${k + 1}) ${r.description || ""}`).join("\n");
     const vals = [
-      i + 1, u.jobOrder || "", u.serial || "", u.dept, u.items.length, u.open, u.items.length - u.open,
+      i + 1, u.jobOrder || "", u.serial || "", u.dept, u.items.length, u.machines, u.open, u.items.length - u.open,
       round1(u.downtime), types, xlDate(u.first), xlDate(u.last), u.items.map(r => r.recordId || "").join("\n"), summary
     ];
     const row = ws.getRow(i + 2);
     vals.forEach((v, j) => {
       const c = row.getCell(j + 1);
       c.value = v;
-      styleBodyCell(c, { h: j >= 11 ? "right" : "center", fmt: cols[j].fmt, fill: u.items.length > 1 ? XL.wipFill : null });
+      styleBodyCell(c, { h: j >= 12 ? "right" : "center", fmt: cols[j].fmt, fill: u.items.length > 1 ? XL.wipFill : null });
     });
-    if (u.open) row.getCell(6).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+    if (u.open) row.getCell(7).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
     row.height = Math.min(160, Math.max(24, u.items.length * 16 + 8));
   });
 }
@@ -2204,7 +2323,7 @@ function buildOpenSheet(wb, S, photos){
   const cols = [
     { h: "#", w: 5 }, { h: "رقم السجل", w: 20 }, { h: "تاريخ التسجيل", w: 12, fmt: "dd/mm/yyyy" },
     { h: "العمر (يوم)", w: 9, fmt: "0" }, { h: "القسم", w: 12 }, { h: "رقم أمر الشغل", w: 13 }, { h: "S/N", w: 13 },
-    { h: "نوع المشكلة", w: 12 }, { h: "وصف الملاحظة", w: 42 }, { h: "الصورة", w: 25 }, { h: "الحالة", w: 12 },
+    { h: "عدد الماكنات", w: 9, fmt: "0" }, { h: "نوع المشكلة", w: 12 }, { h: "وصف الملاحظة", w: 42 }, { h: "الصورة", w: 25 }, { h: "الحالة", w: 12 },
     { h: "المسؤول", w: 16 }, { h: "الإجراء المتخذ / المطلوب", w: 34 },
   ];
   const ws = wb.addWorksheet("المفتوحة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }] });
@@ -2222,20 +2341,20 @@ function buildOpenSheet(wb, S, photos){
     const late = age >= LATE_DAYS;
     const vals = [
       i + 1, r.recordId || "", xlDate(d), age, deptLabel(r.dept), r.jobOrder || "", r.serialNumber || "",
-      r.issueType || "", r.description || "", null, r.status || "مفتوحة", r.owner || "— غير محدد —", r.action || ""
+      machinesOf(r), r.issueType || "", r.description || "", null, r.status || "مفتوحة", r.owner || "— غير محدد —", r.action || ""
     ];
     const row = ws.getRow(i + 2);
     vals.forEach((v, j) => {
       const c = row.getCell(j + 1);
       c.value = v;
-      styleBodyCell(c, { h: [8, 12].includes(j) ? "right" : "center", fmt: cols[j].fmt });
+      styleBodyCell(c, { h: [9, 13].includes(j) ? "right" : "center", fmt: cols[j].fmt });
     });
-    row.getCell(11).fill = fill(statusFill(r.status));
+    row.getCell(12).fill = fill(statusFill(r.status));
     if (late) { row.getCell(4).fill = fill(XL.openFill); row.getCell(4).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } }; }
-    if (!r.owner) row.getCell(12).font = { name: XL_FONT, italic: true, color: { argb: XL.danger } };
+    if (!r.owner) row.getCell(13).font = { name: XL_FONT, italic: true, color: { argb: XL.danger } };
     const info = photos.get(r.id);
-    if (info) { placePhoto(ws, info, 9, i + 1, PHOTO_MAX[0], PHOTO_MAX[1]); row.height = PHOTO_ROW_PT; }
-    else { photoCellFallback(row.getCell(10), r); row.height = 34; }
+    if (info) { placePhoto(ws, info, 10, i + 1, PHOTO_MAX[0], PHOTO_MAX[1]); row.height = PHOTO_ROW_PT; }
+    else { photoCellFallback(row.getCell(11), r); row.height = 34; }
   });
 }
 
@@ -2286,6 +2405,338 @@ async function exportExcelReport(){
     exportExcelBtn.textContent = btnText;
   }
 }
+
+/* =====================================================================
+   متابعة استلام الماكنات (جدول الإنتاج)
+   ---------------------------------------------------------------------
+   - بترفع ملف Master Production (xlsx) → بنقرأ منه بس الأعمدة المطلوبة:
+     Project, Item Number, Sub Item, Model Type, QTY, Assembly Start
+   - "finish in Elec. Panel" = يوم قبل Assembly Start (بينحسب تلقائياً)
+   - الجدول بينحفظ على Firebase كم مستند (كل مستند ~1000 سطر كنص JSON)
+     عشان القراءة تكون قليلة وتضل ضمن الخطة المجانية.
+   - تشييك QC لكل سطر بمستند لحاله (مفتاحه المشروع_Item_Sub) — فلما
+     ترفع جدول جديد التشييكات ما بتضيع.
+   ===================================================================== */
+const PROD_CHUNK = 1000;
+const PROD_PAGE  = 200;
+let prodRows = [];          // [{key, project, item, sub, model, qty, asm, finish}]
+let prodMeta = null;
+let qcMap = {};             // key -> {checked, by, at}
+let prodInited = false;
+let prodFilter = "all";
+let prodShown = PROD_PAGE;
+let pendingSchedule = null; // الجدول اللي انقرأ وبستنى تأكيد
+
+const prodMetaEl   = document.getElementById("prodMeta");
+const prodStatsEl  = document.getElementById("prodStats");
+const prodSearch   = document.getElementById("prodSearch");
+const prodBody     = document.getElementById("prodBody");
+const prodCount    = document.getElementById("prodCount");
+const prodMoreBtn  = document.getElementById("prodMoreBtn");
+const prodFileInput = document.getElementById("prodFileInput");
+const prodConfirmModal = document.getElementById("prodConfirmModal");
+
+function prodKey(project, item, sub){
+  return `${project}_${item}_${sub}`.replace(/\//g, "∕");
+}
+function ymdUTC(d){ return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`; }
+function addDaysYmd(ymd, n){
+  if (!ymd) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
+  return ymdUTC(new Date(Date.UTC(y, m - 1, d + n)));
+}
+function fmtYmd(ymd){
+  if (!ymd) return "—";
+  const [y, m, d] = ymd.split("-");
+  return `${d}/${m}/${y}`;
+}
+function todayYmd(){ return localDateStr(new Date()); }
+
+function initProduction(){
+  if (prodInited) { renderProduction(); return; }
+  prodInited = true;
+  if (!firebaseReady) { prodMetaEl.textContent = "الرجاء ضبط إعدادات Firebase أولاً."; return; }
+  const permMsg = (col) => `Firebase رافض الوصول لمجموعة "${col}". افتح Firestore ← Rules واسمح بالقراءة والكتابة عليها مثل باقي مجموعات الأداة.`;
+
+  db.collection(SCHEDULE_COLLECTION).onSnapshot((snap) => {
+    const docs = {};
+    snap.docs.forEach(d => { docs[d.id] = d.data(); });
+    const meta = docs.meta;
+    if (!meta) { prodMeta = null; prodRows = []; renderProduction(); return; }
+    const chunks = Object.values(docs).filter(d => d.version === meta.version && typeof d.rows === "string")
+      .sort((a, b) => a.i - b.i);
+    if (chunks.length < meta.chunks) return; // التحديث لسا ما وصل كامل
+    prodMeta = meta;
+    prodRows = [];
+    chunks.forEach(c => {
+      JSON.parse(c.rows).forEach(([project, item, sub, model, qty, asm]) => {
+        prodRows.push({ key: prodKey(project, item, sub), project, item, sub, model, qty, asm, finish: addDaysYmd(asm, -1) });
+      });
+    });
+    renderProduction();
+  }, (err) => { console.error(err); prodMetaEl.textContent = permMsg(SCHEDULE_COLLECTION); });
+
+  db.collection(QC_COLLECTION).onSnapshot((snap) => {
+    qcMap = {};
+    snap.docs.forEach(d => { qcMap[d.id] = d.data(); });
+    renderProduction();
+  }, (err) => { console.error(err); showToast(permMsg(QC_COLLECTION), "err"); });
+}
+
+function isChecked(r){ return !!(qcMap[r.key] && qcMap[r.key].checked); }
+function isLate(r, today){ return !isChecked(r) && r.finish && r.finish < today; }
+
+function renderProduction(){
+  if (!prodInited) return;
+  const today = todayYmd();
+  if (!prodMeta) {
+    prodMetaEl.textContent = "ما في جدول إنتاج مرفوع لسا — ارفع ملف Master Production للبدء.";
+  } else {
+    const at = toDateSafe(prodMeta.uploadedAt);
+    prodMetaEl.innerHTML = `آخر تحديث: <b>${at ? `${pad2(at.getDate())}/${pad2(at.getMonth() + 1)}/${at.getFullYear()} ${fmtTime(at)}` : "—"}</b>` +
+      `${prodMeta.by ? ` — ${escapeHtml(prodMeta.by)}` : ""}${prodMeta.fileName ? `<br>الملف: ${escapeHtml(prodMeta.fileName)}` : ""}`;
+  }
+
+  const totalQty = prodRows.reduce((s, r) => s + (r.qty || 0), 0);
+  const checkedRows = prodRows.filter(isChecked);
+  const checkedQty = checkedRows.reduce((s, r) => s + (r.qty || 0), 0);
+  const lateRows = prodRows.filter(r => isLate(r, today));
+  prodStatsEl.innerHTML = prodRows.length ? `
+    <div class="stat-box"><div class="num">${prodRows.length}</div><div class="lbl">سطر بالجدول (${totalQty} ماكنة)</div></div>
+    <div class="stat-box"><div class="num" style="color:var(--ok)">${checkedRows.length}</div><div class="lbl">مستلمة ✓ (${checkedQty} ماكنة)</div></div>
+    <div class="stat-box"><div class="num">${prodRows.length - checkedRows.length}</div><div class="lbl">مش مستلمة (${totalQty - checkedQty} ماكنة)</div></div>
+    <div class="stat-box"><div class="num" style="color:${lateRows.length ? "var(--danger)" : "var(--navy)"}">${lateRows.length}</div><div class="lbl">متأخرة عن موعد اللوحات</div></div>` : "";
+
+  const q = prodSearch.value.trim().toLowerCase();
+  let list = prodRows;
+  if (q) list = list.filter(r => String(r.project).toLowerCase().includes(q) || String(r.model || "").toLowerCase().includes(q));
+  if (prodFilter === "checked") list = list.filter(isChecked);
+  else if (prodFilter === "pending") list = list.filter(r => !isChecked(r));
+  else if (prodFilter === "late") list = list.filter(r => isLate(r, today));
+
+  // الترتيب: لما تبحث عن مشروع بنرتب حسب Item/Sub، غير هيك حسب موعد الانتهاء من اللوحات
+  const cmpItem = (a, b) => (a.item - b.item) || (a.sub - b.sub);
+  if (q) list = list.slice().sort((a, b) => String(a.project).localeCompare(String(b.project)) || cmpItem(a, b));
+  else list = list.slice().sort((a, b) =>
+    (a.finish || "9999").localeCompare(b.finish || "9999") || String(a.project).localeCompare(String(b.project)) || cmpItem(a, b));
+
+  const qtySum = list.reduce((s, r) => s + (r.qty || 0), 0);
+  prodCount.textContent = prodRows.length ? `عدد الأسطر: ${list.length} — عدد الماكنات: ${qtySum}` : "";
+
+  const shown = list.slice(0, prodShown);
+  let lastProject = null;
+  prodBody.innerHTML = shown.map(r => {
+    const qc = qcMap[r.key];
+    const checked = isChecked(r);
+    const late = isLate(r, today);
+    const at = qc && toDateSafe(qc.at);
+    const head = (q && r.project !== lastProject)
+      ? `<tr class="prod-proj-head"><td colspan="8">Project ${escapeHtml(r.project)} — ${list.filter(x => x.project === r.project).length} سطر</td></tr>` : "";
+    lastProject = r.project;
+    return head + `
+      <tr class="${checked ? "checked" : ""}">
+        <td class="proj" onclick="prodSearchProject('${escapeHtml(r.project)}')">${escapeHtml(r.project)}</td>
+        <td>${escapeHtml(r.item)}</td>
+        <td>${escapeHtml(r.sub)}</td>
+        <td class="model">${escapeHtml(r.model)}</td>
+        <td>${escapeHtml(r.qty)}</td>
+        <td class="${late ? "late" : (!checked && r.finish === today ? "today" : "")}">${fmtYmd(r.finish)}</td>
+        <td>${fmtYmd(r.asm)}</td>
+        <td class="qc">
+          <input type="checkbox" class="qc-box" ${checked ? "checked" : ""} onchange="toggleQc('${r.key}', this.checked)">
+          ${checked && qc.by ? `<span class="qc-by">${escapeHtml(qc.by)}${at ? ` · ${pad2(at.getDate())}/${pad2(at.getMonth() + 1)}` : ""}</span>` : ""}
+        </td>
+      </tr>`;
+  }).join("") || `<tr><td colspan="8" style="padding:24px; color:var(--muted);">${prodRows.length ? "ما في نتائج" : "ارفع جدول الإنتاج لعرض الماكنات"}</td></tr>`;
+
+  prodMoreBtn.style.display = list.length > prodShown ? "block" : "none";
+  prodMoreBtn.textContent = `عرض المزيد (${list.length - prodShown} سطر باقي)`;
+}
+
+function prodSearchProject(project){
+  prodSearch.value = project;
+  prodShown = PROD_PAGE;
+  renderProduction();
+  window.scrollTo(0, 0);
+}
+
+prodSearch.addEventListener("input", () => { prodShown = PROD_PAGE; renderProduction(); });
+prodMoreBtn.addEventListener("click", () => { prodShown += PROD_PAGE; renderProduction(); });
+document.querySelectorAll("#prodFilterSeg button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    prodFilter = btn.dataset.f;
+    prodShown = PROD_PAGE;
+    document.querySelectorAll("#prodFilterSeg button").forEach(b => b.classList.toggle("active", b === btn));
+    renderProduction();
+  });
+});
+
+async function toggleQc(key, checked){
+  const identity = chatIdentitySel.value;
+  if (!identity) { showToast("اختر اسمك أولاً", "err"); openIdentityModal(); renderProduction(); return; }
+  const r = prodRows.find(x => x.key === key);
+  try {
+    await db.collection(QC_COLLECTION).doc(key).set({
+      checked,
+      by: identity,
+      at: firebase.firestore.FieldValue.serverTimestamp(),
+      project: r ? r.project : "", item: r ? r.item : "", sub: r ? r.sub : ""
+    }, { merge: true });
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر حفظ التشييك، تحقق من الاتصال", "err");
+    renderProduction();
+  }
+}
+
+/* ---- قراءة ملف Master Production ---- */
+function normHeader(v){ return String(v || "").trim().toLowerCase().replace(/\s+/g, " "); }
+function toYmd(v){
+  if (v == null || v === "") return "";
+  if (v instanceof Date) return isNaN(v) ? "" : ymdUTC(v);
+  if (typeof v === "number") return ymdUTC(new Date(Math.round((v - 25569) * DAY_MS))); // رقم تسلسلي من Excel
+  const m = String(v).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); // dd/mm/yyyy
+  if (m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+  const d = new Date(v);
+  return isNaN(d) ? "" : localDateStr(d);
+}
+
+const PROD_HEADERS = {
+  project: ["project"],
+  item:    ["item number", "item no", "item"],
+  sub:     ["sub item", "sub"],
+  model:   ["model type", "model"],
+  qty:     ["qty", "quantity"],
+  asm:     ["assembly start", "assembly start date"],
+};
+
+// قراءة الملف بمكتبة SheetJS (بتتحمّل بس وقت الرفع) — أمتن من ExcelJS بقراءة ملفات
+// Excel اللي فيها جداول (Tables) أو محفوظة من برامج مختلفة
+const SHEETJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+function loadSheetJS(){
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const sc = document.createElement("script");
+    sc.src = SHEETJS_URL;
+    sc.onload = () => res();
+    sc.onerror = () => rej(new Error("no_lib"));
+    document.head.appendChild(sc);
+  });
+}
+
+async function parseProductionFile(file){
+  await loadSheetJS();
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array", cellDates: false });
+  for (const name of wb.SheetNames) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: "" });
+    let headerRow = -1, cols = null;
+    for (let r = 0; r < Math.min(40, grid.length); r++) {
+      const map = {};
+      grid[r].forEach((v, c) => {
+        const h = normHeader(v);
+        for (const [k, names] of Object.entries(PROD_HEADERS)) {
+          if (map[k] === undefined && names.includes(h)) map[k] = c;
+        }
+      });
+      if (["project", "item", "sub", "model", "qty", "asm"].every(k => map[k] !== undefined)) { headerRow = r; cols = map; break; }
+    }
+    if (!cols) continue;
+    const rows = [];
+    const num = (v) => { const n = parseFloat(v); return isNaN(n) ? String(v).trim() : n; };
+    for (let r = headerRow + 1; r < grid.length; r++) {
+      const row = grid[r];
+      const project = String(row[cols.project] ?? "").trim();
+      if (!project) continue;
+      rows.push([
+        project,
+        num(row[cols.item]),
+        num(row[cols.sub]),
+        String(row[cols.model] ?? "").trim().replace(/\s+/g, " "),
+        parseFloat(row[cols.qty]) || 0,
+        toYmd(row[cols.asm]),
+      ]);
+    }
+    return { rows, sheet: name };
+  }
+  throw new Error("no_header");
+}
+
+document.getElementById("prodUploadBtn").addEventListener("click", () => {
+  if (!firebaseReady) { showToast("الرجاء ضبط إعدادات Firebase أولاً", "err"); return; }
+  requestAdmin(() => prodFileInput.click());
+});
+
+prodFileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  showToast("جاري قراءة الملف...", "ok");
+  try {
+    const { rows } = await parseProductionFile(file);
+    if (!rows.length) { showToast("الملف ما فيه أسطر", "err"); return; }
+    // مقارنة مع الجدول الحالي
+    const newKeys = new Set(rows.map(r => prodKey(r[0], r[1], r[2])));
+    const oldKeys = new Set(prodRows.map(r => r.key));
+    const added = [...newKeys].filter(k => !oldKeys.has(k)).length;
+    const removedRows = prodRows.filter(r => !newKeys.has(r.key));
+    const removedUnchecked = removedRows.filter(r => !isChecked(r)).length;
+    const projects = new Set(rows.map(r => r[0])).size;
+    const qty = rows.reduce((s, r) => s + r[4], 0);
+    const noDate = rows.filter(r => !r[5]).length;
+    pendingSchedule = { rows, fileName: file.name, projects, qty };
+    document.getElementById("prodConfirmText").innerHTML =
+      `الملف فيه <b>${rows.length}</b> سطر — <b>${projects}</b> مشروع — <b>${qty}</b> ماكنة.` +
+      (noDate ? `<br>${noDate} سطر بدون Assembly Start (رح يظهروا بدون تاريخ).` : "") +
+      (prodRows.length ? `<br><br>مقارنة بالجدول الحالي:<br>• أسطر جديدة: <b>${added}</b><br>• أسطر انشالت من الجدول: <b>${removedRows.length}</b>` +
+        (removedUnchecked ? ` <span style="color:var(--danger)">(منهم ${removedUnchecked} ما تشيّكوا QC)</span>` : "") : "") +
+      `<br><br>تشييكات QC السابقة بتضل محفوظة.`;
+    prodConfirmModal.classList.add("show");
+  } catch (err) {
+    console.error(err);
+    showToast(err.message === "no_header"
+      ? "ما لقيت أعمدة Project / Item Number / Sub Item / Model Type / QTY / Assembly Start بالملف"
+      : err.message === "no_lib" ? "تعذّر تحميل مكتبة قراءة Excel — تأكد من الإنترنت"
+      : "تعذّر قراءة الملف — تأكد إنه ملف Excel", "err");
+  }
+});
+
+document.getElementById("prodConfirmCancel").addEventListener("click", () => {
+  pendingSchedule = null;
+  prodConfirmModal.classList.remove("show");
+});
+
+document.getElementById("prodConfirmOk").addEventListener("click", async () => {
+  if (!pendingSchedule) return;
+  const btn = document.getElementById("prodConfirmOk");
+  btn.disabled = true;
+  try {
+    const { rows, fileName, projects, qty } = pendingSchedule;
+    const version = String(Date.now());
+    const nChunks = Math.ceil(rows.length / PROD_CHUNK);
+    const col = db.collection(SCHEDULE_COLLECTION);
+    const batch = db.batch();
+    for (let i = 0; i < nChunks; i++) {
+      batch.set(col.doc(`chunk_${i}`), { version, i, rows: JSON.stringify(rows.slice(i * PROD_CHUNK, (i + 1) * PROD_CHUNK)) });
+    }
+    const oldChunks = prodMeta ? (prodMeta.chunks || 0) : 0;
+    for (let i = nChunks; i < oldChunks; i++) batch.delete(col.doc(`chunk_${i}`));
+    batch.set(col.doc("meta"), {
+      version, chunks: nChunks, count: rows.length, projects, qty, fileName,
+      by: chatIdentitySel.value || "",
+      uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
+    pendingSchedule = null;
+    prodConfirmModal.classList.remove("show");
+    showToast(`تم تحديث جدول الإنتاج — ${rows.length} سطر`, "ok");
+  } catch (err) {
+    console.error(err);
+    showToast("تعذّر حفظ الجدول — تحقق من الاتصال ومن صلاحيات Firebase", "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 
 /* =====================================================================
    9) نافذة تكبير الصورة
