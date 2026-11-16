@@ -289,6 +289,12 @@
   .modal-box input, .modal-box select, .modal-box textarea{ margin-bottom:14px; width:100%; padding:12px; border:1.5px solid var(--line); border-radius:10px; font-family:inherit; font-size:14.5px; direction:rtl; background:#fff; }
   .modal-box label{ display:block; font-size:12.5px; font-weight:700; color:var(--navy); margin-bottom:6px; }
   .modal-box textarea{ min-height:70px; resize:vertical; }
+  #editRecordModal .modal-box{ max-height:90vh; overflow-y:auto; }
+  #adminPasswordModal{ z-index:510; } /* كلمة السر لازم تطلع فوق أي نافذة ثانية */
+  .lock-btn{ display:block; width:100%; padding:11px; margin-bottom:14px; border:1.5px dashed var(--deep); background:#F4F8FA; color:var(--deep); border-radius:10px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .locked-section{ display:none; border:1.5px solid var(--amber); background:#FFFBF3; border-radius:12px; padding:12px 12px 2px; margin-bottom:14px; }
+  .locked-section.show{ display:block; }
+  .locked-title{ font-size:13px; font-weight:800; color:var(--amber-dark); margin-bottom:10px; }
   .modal-actions{ display:flex; gap:10px; }
   .modal-actions button{ flex:1; padding:12px; border-radius:10px; border:none; font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; }
   .modal-actions .cancel{ background:#EEF2F4; color:var(--muted); }
@@ -687,11 +693,22 @@
     <label>ساعات التوقف الناتجة</label>
     <input type="number" id="editDowntime" min="0" step="0.5">
 
-    <label>الرقم التسلسلي (S/N)</label>
-    <input type="text" id="editSerial" placeholder="مثلاً 0101001">
-
-    <label>عدد الماكنات اللي عليها الملاحظة</label>
-    <input type="number" id="editMachines" min="1" step="1" inputmode="numeric">
+    <button type="button" class="lock-btn" id="editUnlockBtn">🔒 تعديل بيانات الملاحظة (القسم، أمر الشغل، النوع، S/N، عدد الماكنات، الوصف)</button>
+    <div class="locked-section" id="editLocked">
+      <div class="locked-title">🔓 بيانات الملاحظة — تعديل المسؤول</div>
+      <label>القسم</label>
+      <select id="editDept"></select>
+      <label>رقم أمر الشغل</label>
+      <input type="text" id="editJobOrder" inputmode="numeric">
+      <label>نوع المشكلة</label>
+      <select id="editIssueType"></select>
+      <label>الرقم التسلسلي (S/N)</label>
+      <input type="text" id="editSerial" placeholder="مثلاً 0101001">
+      <label>عدد الماكنات اللي عليها الملاحظة</label>
+      <input type="number" id="editMachines" min="1" step="1" inputmode="numeric">
+      <label>وصف الملاحظة</label>
+      <textarea id="editDesc"></textarea>
+    </div>
 
     <div class="modal-actions">
       <button type="button" class="cancel" id="editRecordCancel">إلغاء</button>
@@ -1634,6 +1651,20 @@ const editAction        = document.getElementById("editAction");
 const editDowntime      = document.getElementById("editDowntime");
 const editSerial        = document.getElementById("editSerial");
 const editMachines      = document.getElementById("editMachines");
+const editDept          = document.getElementById("editDept");
+const editJobOrder      = document.getElementById("editJobOrder");
+const editIssueType     = document.getElementById("editIssueType");
+const editDesc          = document.getElementById("editDesc");
+const editLocked        = document.getElementById("editLocked");
+const editUnlockBtn     = document.getElementById("editUnlockBtn");
+let editUnlocked = false; // بيانات الملاحظة الأساسية ما بتتعدل إلا بعد كلمة سر المسؤول
+
+function setEditUnlocked(on){
+  editUnlocked = on;
+  editLocked.classList.toggle("show", on);
+  editUnlockBtn.style.display = on ? "none" : "block";
+}
+editUnlockBtn.addEventListener("click", () => requestAdmin(() => setEditUnlocked(true)));
 const editRecordCancel  = document.getElementById("editRecordCancel");
 const editRecordConfirm = document.getElementById("editRecordConfirm");
 let editingRecordId = null;
@@ -1648,6 +1679,18 @@ function openEditRecord(id){
   editDowntime.value = record.downtime || 0;
   editSerial.value = record.serialNumber || "";
   editMachines.value = machinesOf(record);
+  editJobOrder.value = record.jobOrder || "";
+  editDesc.value = record.description || "";
+  // القوائم الحالية + القيمة القديمة لو انشالت من القائمة
+  const depts = allDepts.map(d => ({ ...d }));
+  if (record.dept && !depts.some(d => d.value === record.dept)) depts.push({ value: record.dept, label: deptLabel(record.dept) });
+  editDept.innerHTML = depts.map(d => `<option value="${escapeHtml(d.value)}">${escapeHtml(d.label)}</option>`).join("");
+  editDept.value = record.dept || "";
+  const types = [...allTypes];
+  if (record.issueType && !types.includes(record.issueType)) types.push(record.issueType);
+  editIssueType.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+  editIssueType.value = record.issueType || "";
+  setEditUnlocked(false);
   const ownerNames = [...allNames];
   if (record.owner && !ownerNames.includes(record.owner)) ownerNames.push(record.owner); // مسؤول انشال من القائمة
   editOwner.innerHTML = `<option value="">بدون تحديد</option>` +
@@ -1672,9 +1715,26 @@ editRecordConfirm.addEventListener("click", async () => {
       action: editAction.value.trim(),
       owner: editOwner.value,
       downtime: parseFloat(editDowntime.value) || 0,
-      serialNumber: editSerial.value.trim(),
-      machineCount: readMachines(editMachines),
     };
+    if (editUnlocked) {
+      const jobOrder = editJobOrder.value.trim();
+      const description = editDesc.value.trim();
+      if (!editDept.value || !jobOrder || !editIssueType.value || !description) {
+        showToast("القسم وأمر الشغل ونوع المشكلة والوصف ما بصير يضلوا فاضيين", "err");
+        editRecordConfirm.disabled = false;
+        return;
+      }
+      Object.assign(upd, {
+        dept: editDept.value,
+        jobOrder,
+        issueType: editIssueType.value,
+        serialNumber: editSerial.value.trim(),
+        machineCount: readMachines(editMachines),
+        description,
+        editedBy: chatIdentitySel.value || "",
+        editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
     // تاريخ الإغلاق: بيلزم لحساب "متوسط أيام الإغلاق" وعمر الملاحظات بالتقرير
     if (upd.status === "مغلقة" && record.status !== "مغلقة") {
       upd.closedAt = firebase.firestore.FieldValue.serverTimestamp();
