@@ -370,6 +370,28 @@
   .rec-actions{ flex-wrap:wrap; }
   .rec-count{ font-size:12px; color:var(--muted); margin-bottom:10px; }
   .aging-row .n.late{ background:#FBE8E4; color:var(--danger); }
+
+  /* ===== Analysis tables ===== */
+  .sec-head{ font-size:13px; font-weight:800; color:#fff; background:var(--navy); border-radius:10px 10px 0 0; padding:7px 12px; }
+  .sec-head.amber{ background:var(--amber-dark); }
+  .sec-head + .stat-grid{ background:#fff; border:1px solid var(--line); border-top:none; border-radius:0 0 12px 12px; padding:10px; }
+  .stat-box.amber{ border-top:3px solid var(--amber); }
+  .mini-wrap{ overflow-x:auto; margin-top:12px; border:1px solid var(--line); border-radius:10px; }
+  .mini-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .mini-table th{ background:var(--navy); color:#fff; font-weight:700; padding:7px 6px; white-space:nowrap; }
+  .mini-table td{ padding:7px 6px; border-top:1px solid var(--line); text-align:center; }
+  .mini-table td:first-child{ text-align:right; }
+  .mini-table tr.ph-before td{ background:#E3EEF4; }
+  .mini-table tr.ph-test td{ background:#FBEED9; }
+  .mini-table tr.ph-after td{ background:#ECEFF2; }
+  .mini-table tr.tot td{ background:#D9E2EC; font-weight:800; }
+  .legend-row{ font-size:11.5px; color:var(--muted); margin-top:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .ph-dot{ width:11px; height:11px; border-radius:3px; display:inline-block; margin-inline-start:8px; }
+  .ph-dot.ph-before{ background:#065A82; } .ph-dot.ph-test{ background:#E8A33D; } .ph-dot.ph-after{ background:#8A96A3; }
+  .recs-box{ background:#FBEED9; border-radius:10px; padding:10px 12px; margin-top:10px; font-size:13px; color:var(--navy); }
+  .recs-box ol{ margin:6px 0 0; padding-inline-start:20px; line-height:1.7; }
+  .rec-card.flash{ animation:recFlash 1.6s ease; }
+  @keyframes recFlash{ 0%,40%{ box-shadow:0 0 0 3px var(--amber); } 100%{ box-shadow:0 0 0 0 transparent; } }
 </style>
 </head>
 <body>
@@ -448,7 +470,7 @@
         </div>
       </div>
       <button type="button" class="btn-primary" id="exportExcelBtn">📊 تصدير تقرير Excel (مع الصور)</button>
-      <div class="hint" style="margin-top:10px;">التقرير فيه: ملخّص بالمؤشرات وأبرز النتائج والرسوم، كل الملاحظات مع صورة كل ملاحظة داخل الملف، تجميع حسب الحبة، قائمة الملاحظات المفتوحة مع عمرها، وتحليل باريتو لأنواع المشاكل.</div>
+      <div class="hint" style="margin-top:10px;">التقرير مرتب على مسار اللوحة: ورقة "التقرير" (مؤشرات، جداول المراحل، تصنيف العيوب، التسلسل اليومي، منشأ أخطاء Testing، النتائج والتوصيات، والرسوم)، ثم ملاحظات ما قبل Testing، ملاحظات Testing والمنشأ، كل الملاحظات مع صورها، المفتوحة، وحسب الحبة.</div>
     </div>
 
     <div id="analysisEmpty" class="empty" style="display:none;">
@@ -457,34 +479,53 @@
     </div>
 
     <div id="analysisContent">
+      <div class="sec-head">المؤشرات العامة</div>
       <div id="statGrid" class="stat-grid"></div>
-
-      <div class="card">
-        <div class="section-title">أبرز النتائج</div>
-        <div id="findingsList"></div>
-      </div>
+      <div class="sec-head amber">التركيز: ما قبل مرحلة Testing</div>
+      <div id="statGridBefore" class="stat-grid"></div>
 
       <div id="chartsUnavailableNotice" class="config-warning" style="display:none;">
         تعذّر تحميل مكتبة الرسوم البيانية — تأكد من اتصال الإنترنت عندك وأعد فتح الصفحة. باقي الأرقام والتصدير لملف Excel شغالين طبيعي.
       </div>
 
       <div class="card">
-        <div class="section-title">عدد الملاحظات حسب القسم</div>
-        <div class="chart-wrap"><canvas id="chartByDept"></canvas></div>
+        <div class="section-title">1) الملاحظات حسب مرحلة الاكتشاف (بترتيب مسار اللوحة)</div>
+        <div class="chart-wrap"><canvas id="chartStage"></canvas></div>
+        <div id="tblStage"></div>
+        <div class="legend-row"><span class="ph-dot ph-before"></span>قبل Testing <span class="ph-dot ph-test"></span>Testing <span class="ph-dot ph-after"></span>بعد Testing</div>
       </div>
       <div class="card">
-        <div class="section-title">باريتو أنواع المشاكل (العدد + النسبة التراكمية)</div>
-        <div class="chart-wrap"><canvas id="chartByType"></canvas></div>
+        <div class="section-title">2) قبل Testing مقابل Testing وما بعده</div>
+        <div class="chart-wrap" style="height:210px;"><canvas id="chartPhase"></canvas></div>
+        <div id="tblPhase"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">3) تصنيف العيب: وين انكشف؟</div>
+        <div class="chart-wrap"><canvas id="chartCats"></canvas></div>
+        <div id="tblCats"></div>
+        <div class="hint" style="margin-top:6px;">التصنيف تلقائي من وصف الملاحظة، وبتقدر تعدّله من "✏️ تحديث / تسكير" بتبويب السجلات.</div>
+      </div>
+      <div class="card">
+        <div class="section-title">4) الملاحظات اليومية خلال الفترة</div>
+        <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="section-title">5) ملاحظات Testing: من وين نشأ الخطأ؟</div>
+        <div class="chart-wrap"><canvas id="chartOrigin"></canvas></div>
+        <div id="tblOrigin"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">أبرز النتائج والتوصيات</div>
+        <div id="findingsList"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">ساعات التوقف حسب المرحلة</div>
+        <div class="chart-wrap"><canvas id="chartDowntime"></canvas></div>
       </div>
       <div class="card">
         <div class="section-title">توزيع الحالات</div>
-        <div class="chart-wrap" style="height:220px;"><canvas id="chartByStatus"></canvas></div>
+        <div class="chart-wrap" style="height:210px;"><canvas id="chartStatus"></canvas></div>
       </div>
-      <div class="card">
-        <div class="section-title">ساعات التوقف حسب القسم</div>
-        <div class="chart-wrap"><canvas id="chartDowntime"></canvas></div>
-      </div>
-
       <div class="card">
         <div class="section-title">الحبات اللي عليها أكثر من ملاحظة</div>
         <div id="breakdownUnits"></div>
@@ -492,18 +533,6 @@
       <div class="card">
         <div class="section-title">ملاحظات مفتوحة — الأقدم أولاً</div>
         <div id="breakdownAging"></div>
-      </div>
-      <div class="card">
-        <div class="section-title">حسب القسم</div>
-        <div id="breakdownDept"></div>
-      </div>
-      <div class="card">
-        <div class="section-title">حسب نوع المشكلة</div>
-        <div id="breakdownType"></div>
-      </div>
-      <div class="card">
-        <div class="section-title">حسب الحالة</div>
-        <div id="breakdownStatus"></div>
       </div>
     </div>
   </div>
@@ -693,6 +722,14 @@
     <label>ساعات التوقف الناتجة</label>
     <input type="number" id="editDowntime" min="0" step="0.5">
 
+    <label>تصنيف العيب (للتقرير)</label>
+    <select id="editCategory"></select>
+
+    <div id="editOriginWrap">
+      <label>منشأ الخطأ (لملاحظات Testing)</label>
+      <select id="editOrigin"></select>
+    </div>
+
     <button type="button" class="lock-btn" id="editUnlockBtn">🔒 تعديل بيانات الملاحظة (القسم، أمر الشغل، النوع، S/N، عدد الماكنات، الوصف)</button>
     <div class="locked-section" id="editLocked">
       <div class="locked-title">🔓 بيانات الملاحظة — تعديل المسؤول</div>
@@ -822,7 +859,7 @@ const BASE_DEPTS = [
   { value: "RMAS",    label: "RMAS" },
   { value: "RAS",     label: "RAS" },
   { value: "Packing", label: "التغليف" },
-];
+]; // (القائمة الفعلية — Cutting/Layout/Power/Control/Testing — محفوظة على Firebase من زر ⚙️ الفريق)
 const BASE_TYPES = ["مادة", "عملية", "تصميم", "بشري"];
 
 const RECORD_PREFIX = "EP"; // بادئة رقم السجل للملاحظات الجديدة (القديمة بتضل P2H3-...)
@@ -1476,10 +1513,17 @@ function renderFeed(list){
       </div>`;
   }).join("");
 
-  const wrap = document.getElementById("feedWrap");
-  wrap.scrollTop = wrap.scrollHeight;
-  window.scrollTo(0, document.body.scrollHeight);
+  // ننزل لآخر رسالة بس إذا تبويب المحادثة مفتوح وفي رسالة/ملاحظة جديدة فعلاً —
+  // مش عند أي تعديل على ملاحظة (كان هاد سبب الرجوع لآخر الصفحة بعد "تحديث / تسكير")
+  const grew = list.length > lastFeedCount;
+  lastFeedCount = list.length;
+  if (grew && viewChat.classList.contains("active")) {
+    const wrap = document.getElementById("feedWrap");
+    wrap.scrollTop = wrap.scrollHeight;
+    window.scrollTo(0, document.body.scrollHeight);
+  }
 }
+let lastFeedCount = 0;
 
 /* حذف رسالة من المحادثة: رسالتك بتحذفها مباشرة، ورسالة غيرك بدها كلمة سر المسؤول */
 function deleteChatMsg(id){
@@ -1560,7 +1604,7 @@ function renderRecords(){
   recordsContainer.innerHTML = list.map(r => {
     const uc = unitCounts[unitKeyOf(r.jobOrder, r.serialNumber)] || 1;
     return `
-    <div class="rec-card">
+    <div class="rec-card" data-id="${r.id}">
       ${r.photoUrl
         ? `<img class="rec-thumb" src="${r.photoUrl}" alt="صورة الملاحظة" onclick="openImage('${r.photoUrl}')">`
         : `<div class="rec-thumb"></div>`}
@@ -1573,6 +1617,8 @@ function renderRecords(){
         ${uc > 1 ? `<span class="unit-badge" onclick="filterByUnit('${r.id}')">🔁 الحبة عليها ${uc} ملاحظات — اعرضها</span>` : ""}
         <div class="rec-desc">${escapeHtml(r.description)}</div>
         <div class="rec-meta">
+          <span>المرحلة: ${escapeHtml(deptLabel(r.dept))}</span>
+          <span>التصنيف: ${escapeHtml(categoryOf(r))}</span>
           <span>النوع: ${escapeHtml(r.issueType)}</span>
           ${r.downtime ? `<span>الركود: ${r.downtime} س</span>` : ""}
           ${r.owner ? `<span>المسؤول: ${escapeHtml(r.owner)}</span>` : ""}
@@ -1665,6 +1711,9 @@ function setEditUnlocked(on){
   editUnlockBtn.style.display = on ? "none" : "block";
 }
 editUnlockBtn.addEventListener("click", () => requestAdmin(() => setEditUnlocked(true)));
+const editCategory      = document.getElementById("editCategory");
+const editOrigin        = document.getElementById("editOrigin");
+const editOriginWrap    = document.getElementById("editOriginWrap");
 const editRecordCancel  = document.getElementById("editRecordCancel");
 const editRecordConfirm = document.getElementById("editRecordConfirm");
 let editingRecordId = null;
@@ -1696,6 +1745,19 @@ function openEditRecord(id){
   editOwner.innerHTML = `<option value="">بدون تحديد</option>` +
     ownerNames.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
   editOwner.value = record.owner || "";
+  // تصنيف العيب + منشأ الخطأ: "تلقائي" = حسب الوصف
+  const catOpts = [...DEFECT_CATS];
+  if (record.defectCategory && !catOpts.includes(record.defectCategory)) catOpts.push(record.defectCategory);
+  editCategory.innerHTML = `<option value="">تلقائي — ${escapeHtml(autoCategory(record))}</option>` +
+    catOpts.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  editCategory.value = record.defectCategory || "";
+  const isTest = phaseOf(record) === PH_TEST;
+  editOriginWrap.style.display = isTest ? "block" : "none";
+  const origOpts = [...ORIGINS];
+  if (record.origin && !origOpts.includes(record.origin)) origOpts.push(record.origin);
+  editOrigin.innerHTML = `<option value="">تلقائي — ${escapeHtml(isTest ? autoOrigin({ ...record, origin: "" , defectCategory: record.defectCategory }) : "")}</option>` +
+    origOpts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+  editOrigin.value = record.origin || "";
   editRecordModal.classList.add("show");
 }
 
@@ -1715,6 +1777,8 @@ editRecordConfirm.addEventListener("click", async () => {
       action: editAction.value.trim(),
       owner: editOwner.value,
       downtime: parseFloat(editDowntime.value) || 0,
+      defectCategory: editCategory.value,
+      origin: editOriginWrap.style.display === "none" ? (record.origin || "") : editOrigin.value,
     };
     if (editUnlocked) {
       const jobOrder = editJobOrder.value.trim();
@@ -1743,10 +1807,21 @@ editRecordConfirm.addEventListener("click", async () => {
       upd.closedAt = null;
       upd.closedBy = "";
     }
+    const savedId = editingRecordId;
+    const keepY = window.scrollY; // نضل بنفس المكان بالصفحة بعد الحفظ
     await db.collection(OBS_COLLECTION).doc(editingRecordId).update(upd);
     editRecordModal.classList.remove("show");
     showToast("تم تحديث الملاحظة بنجاح", "ok");
     editingRecordId = null;
+    requestAnimationFrame(() => {
+      window.scrollTo(0, keepY);
+      const card = recordsContainer.querySelector(`.rec-card[data-id="${savedId}"]`);
+      if (card) {
+        card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+        const rc = card.getBoundingClientRect();
+        if (rc.top < 120 || rc.bottom > window.innerHeight) card.scrollIntoView({ block: "center" });
+      }
+    });
   } catch (err) {
     console.error(err);
     showToast("تعذّر حفظ التحديث، تحقق من الاتصال", "err");
@@ -1756,7 +1831,13 @@ editRecordConfirm.addEventListener("click", async () => {
 });
 
 /* =====================================================================
-   8) تبويب التحليل — فلترة سجلات فترة محددة، عرض ملخّص، وتصدير Excel
+   8) تبويب التحليل + تقرير Excel
+   ---------------------------------------------------------------------
+   التقرير مبني على "مرحلة الاكتشاف" بمسار اللوحة:
+   Cutting ← Layout ← Power ← Control ← Testing ← التغليف
+   وكل ملاحظة بتنصنّف تلقائياً (من الوصف) حسب "تصنيف العيب"، وملاحظات
+   Testing بينقدّر "منشأ الخطأ" فيها. المسؤول بيقدر يعدّل التصنيف والمنشأ
+   يدوياً من نافذة "تحديث / تسكير".
    ===================================================================== */
 const analysisFrom    = document.getElementById("analysisFrom");
 const analysisTo      = document.getElementById("analysisTo");
@@ -1764,53 +1845,7 @@ const exportExcelBtn  = document.getElementById("exportExcelBtn");
 const analysisEmpty   = document.getElementById("analysisEmpty");
 const analysisContent = document.getElementById("analysisContent");
 
-if (typeof Chart !== "undefined") {
-  Chart.defaults.font.family = "'Tajawal', Tahoma, Arial, sans-serif";
-  Chart.defaults.color = "#5B6672";
-  // إيقاف الحركة الانتقالية: نتجنب هيك أي وميض بصري عند تغيير الفترة بسرعة
-  // (كل تغيير بالتاريخ بيهدم الرسم القديم ويبني رسم جديد فوراً على نفس الكانفاس)
-  Chart.defaults.animation = false;
-}
-const chartInstances = {};
-function renderOrUpdateChart(canvasId, config){
-  if (typeof Chart === "undefined") return;
-  const existing = chartInstances[canvasId];
-  if (existing) {
-    existing.destroy();
-    delete chartInstances[canvasId];
-  }
-  const canvas = document.getElementById(canvasId);
-  const ctx = canvas.getContext("2d");
-  // تفريغ الكانفاس يدوياً قبل الرسم من جديد — يمنع أي بقايا رسم قديم عالكانفاس
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  chartInstances[canvasId] = new Chart(ctx, config);
-}
-
-(function setDefaultAnalysisRange(){
-  const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  analysisFrom.value = localDateStr(firstOfMonth);
-  analysisTo.value = localDateStr(today);
-})();
-function pad2(n){ return String(n).padStart(2, "0"); }
-// تاريخ محلي (مش UTC) — عشان أول الشهر ما يطلع آخر يوم بالشهر الماضي بعد منتصف الليل
-function localDateStr(d){ return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
-
-analysisFrom.addEventListener("change", renderAnalysisSummary);
-analysisTo.addEventListener("change", renderAnalysisSummary);
-
-function getRecordsInRange(){
-  if (!analysisFrom.value || !analysisTo.value) return [];
-  const from = new Date(analysisFrom.value + "T00:00:00");
-  const to   = new Date(analysisTo.value + "T23:59:59");
-  return allRecords.filter(r => {
-    if (!r.createdAt || !r.createdAt.toDate) return false;
-    const d = r.createdAt.toDate();
-    return d >= from && d <= to;
-  });
-}
-
-/* ---- أدوات حساب مشتركة بين شاشة التحليل وتقرير Excel ---- */
+/* XLREPORT-START — منطق التحليل والتقرير (ما بيلمس الصفحة، فبينفع يتجرّب لحاله) */
 const DAY_MS = 86400000;
 const LATE_DAYS = 7; // الملاحظة المفتوحة أكثر من هيك بتعتبر متأخرة
 function toDateSafe(ts){ return (ts && ts.toDate) ? ts.toDate() : null; }
@@ -1828,36 +1863,198 @@ function sortedEntries(obj){ return Object.entries(obj).sort((a, b) => b[1] - a[
 function pct(n, total){ return total ? n / total : 0; }
 function fmtPct(x){ return Math.round(x * 100) + "%"; }
 function round1(x){ return Math.round((x || 0) * 10) / 10; }
+function dayKey(d){ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function ddmm(key){ const [, m, d] = key.split("-"); return `${d}/${m}`; }
+function ddmmyyyy(key){ const [y, m, d] = key.split("-"); return `${d}/${m}/${y}`; }
 
+/* ---- مسار اللوحة ومراحل الاكتشاف ---- */
+const FLOW_STAGES = ["Cutting", "Layout", "Power", "Control", "Testing", "التغليف"];
+const PH_BEFORE = "قبل Testing", PH_TEST = "Testing", PH_AFTER = "بعد Testing";
+const PHASES = [PH_BEFORE, PH_TEST, PH_AFTER];
+const PHASE_COLORS = { [PH_BEFORE]: "#065A82", [PH_TEST]: "#E8A33D", [PH_AFTER]: "#8A96A3" };
+
+function stageOf(r){ return deptLabel(r.dept) || "غير محدد"; }
+function stageRank(s){
+  const t = String(s || "").trim().toLowerCase();
+  const i = FLOW_STAGES.findIndex(x => x.toLowerCase() === t);
+  if (i >= 0) return i;
+  if (/pack|تغليف/i.test(t)) return 5;
+  return 3.5; // قسم مش ضمن المسار المعروف → بنحطه قبل Testing
+}
+function phaseOf(r){
+  const s = String(stageOf(r)).trim(), v = String(r.dept || "").trim();
+  if (/^testing$/i.test(s) || /^testing$/i.test(v)) return PH_TEST;
+  if (/pack|تغليف/i.test(s) || /pack/i.test(v)) return PH_AFTER;
+  return PH_BEFORE;
+}
+
+/* ---- تصنيف العيب (تلقائي من الوصف — الترتيب مهم: أول تصنيف بيطابق بينعتمد) ---- */
+function normAr(t){
+  return String(t || "").toLowerCase()
+    .replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي")
+    .replace(/[ً-ْ]/g, "").replace(/\s+/g, " ");
+}
+const CAT_DOCS = "توثيق وإجراءات الفحص";
+const CAT_PAINT = "دهان البوكس / البسبار";
+const CAT_DRAWING = "عدم مطابقة المخطط / الترقيم";
+const CAT_MATERIAL = "نقص مواد / قطع / ملصقات";
+const CAT_FINISH = "تشطيب ونظافة";
+const CAT_WIRING = "تركيب وتوصيل الأسلاك والأطراف";
+const CAT_MECH = "أضرار وأخطاء ميكانيكية";
+const CAT_OTHER = "أخرى / غير مصنّف";
+const DEFECT_RULES = [
+  [CAT_DOCS,     ["check list", "checklist", "توثيق", "كتابة", "سوفت", "software", "الفحص قبل"]],
+  [CAT_PAINT,    ["دهان", "تقشر", "قحط", "تكتل", "paint", "صدأ"]],
+  [CAT_DRAWING,  ["مخطط", "مطابق", "ترقيم", "drawing", "schematic", "diagram"]],
+  [CAT_MATERIAL, ["نقص", "ناقص", "لا يوجد", "عدم وجود", "ستكر", "ستيكر", "sticker", "shortage", "missing"]],
+  [CAT_FINISH,   ["تشطيب", "نظاف", "رايش", "برادة", "أوساخ", "finish", "clean"]],
+  [CAT_WIRING,   ["loose", "crimp", "ferrule", "termination", "lug", "shoe", "sleeve", "سليف", "راسية", "اسلاك", "أسلاك", "سلك", "كيبل", "cable", "wire", "دكت", "النتر", "فايبر"]],
+  [CAT_MECH,     ["ضرب", "كسر", "خدش", "انبعاج", "hose", "براغي", "برغي", "شبر", "فتحات", "بليت", "damage"]],
+  [CAT_WIRING,   ["توصيل", "تركيب", "شد", "ربط"]],
+].map(([name, kw]) => ({ name, kw: kw.map(normAr) }));
+const DEFECT_CATS = [CAT_WIRING, CAT_DRAWING, CAT_MATERIAL, CAT_FINISH, CAT_MECH, CAT_PAINT, CAT_DOCS, CAT_OTHER];
+
+function autoCategory(r){
+  const t = normAr(r.description);
+  const hit = DEFECT_RULES.find(c => c.kw.some(k => t.includes(k)));
+  return hit ? hit.name : CAT_OTHER;
+}
+function categoryOf(r){ return (r.defectCategory && String(r.defectCategory).trim()) || autoCategory(r); }
+
+/* ---- منشأ الخطأ لملاحظات Testing (تقدير للمراجعة) ---- */
+const ORIGIN_ASM = "مراحل التجميع قبل Testing (Layout/Power/Control)";
+const ORIGIN_BOX = "تصنيع ودهان البوكس (قبل دخول القسم)";
+const ORIGIN_DESIGN = "التصميم / المخطط";
+const ORIGIN_MAT = "المواد / المستودع";
+const ORIGIN_HANDLING = "المناولة والنقل";
+const ORIGIN_INSP = "إجراءات الفحص نفسها";
+const ORIGINS = [ORIGIN_ASM, ORIGIN_BOX, ORIGIN_DESIGN, ORIGIN_MAT, ORIGIN_HANDLING, ORIGIN_INSP];
+
+function autoOrigin(r){
+  const ph = phaseOf(r);
+  if (ph === PH_BEFORE) return `نفس المرحلة (${stageOf(r)})`;
+  if (ph === PH_AFTER) return PH_AFTER;
+  const t = normAr(r.description), cat = categoryOf(r);
+  if (cat === CAT_DOCS) return ORIGIN_INSP;
+  if (cat === CAT_PAINT) return ORIGIN_BOX;
+  if (cat === CAT_DRAWING) return (r.issueType === "تصميم" || /بحاجه|تعديل المخطط|تعديلات/.test(t)) ? ORIGIN_DESIGN : ORIGIN_ASM;
+  if (cat === CAT_MATERIAL) return /shortage|material|مستودع|مواد/.test(t) ? ORIGIN_MAT : ORIGIN_ASM;
+  if (cat === CAT_MECH) {
+    if (/كسر|ضرب|خدش|انبعاج/.test(t)) return ORIGIN_HANDLING;
+    if (/براغي|برغي|بليت|بوكس|box/.test(t)) return ORIGIN_BOX;
+  }
+  return ORIGIN_ASM;
+}
+function originOf(r){
+  if (phaseOf(r) === PH_TEST && r.origin && String(r.origin).trim()) return String(r.origin).trim();
+  return autoOrigin(r);
+}
+
+/* ---- الحسابات ---- */
 function computeStats(list){
   const now = Date.now();
   const total = list.length;
   const dt = (r) => parseFloat(r.downtime) || 0;
-  const byDept   = countByFn(list, r => deptLabel(r.dept));
+  const isOpen = (r) => r.status !== "مغلقة";
   const byType   = countByFn(list, r => r.issueType);
   const byStatus = countByFn(list, r => r.status || "مفتوحة");
   const byReporter = countByFn(list, r => r.reporterName);
-  const openByDept = countByFn(list.filter(r => r.status !== "مغلقة"), r => deptLabel(r.dept));
-  const downtimeByDept = sumByFn(list, r => deptLabel(r.dept), dt);
   const totalDowntime = list.reduce((s, r) => s + dt(r), 0);
   const totalMachines = list.reduce((s, r) => s + machinesOf(r), 0);
-  const machinesByDept = sumByFn(list, r => deptLabel(r.dept), machinesOf);
-  const machinesByType = sumByFn(list, r => r.issueType, machinesOf);
 
-  const closed   = list.filter(r => r.status === "مغلقة");
-  const openList = list.filter(r => r.status !== "مغلقة");
-  const closeDays = closed.map(r => {
+  const closed   = list.filter(r => !isOpen(r));
+  const openList = list.filter(isOpen);
+  const closeDaysOf = (r) => {
     const c = toDateSafe(r.closedAt), o = toDateSafe(r.createdAt);
     return (c && o) ? Math.max(0, (c - o) / DAY_MS) : null;
-  }).filter(x => x !== null);
-  const avgCloseDays = closeDays.length ? closeDays.reduce((a, b) => a + b, 0) / closeDays.length : null;
-
+  };
   const ageOf = (r) => {
     const o = toDateSafe(r.createdAt);
     return o ? Math.floor((now - o.getTime()) / DAY_MS) : 0;
   };
+  // "العمر / مدة الإغلاق": للمغلقة مدة الإغلاق، وللمفتوحة عمرها لهلأ
+  const daysOf = (r) => isOpen(r) ? ageOf(r) : (closeDaysOf(r) === null ? null : Math.round(closeDaysOf(r)));
+  const closeDays = closed.map(closeDaysOf).filter(x => x !== null);
+  const avgCloseDays = closeDays.length ? closeDays.reduce((a, b) => a + b, 0) / closeDays.length : null;
   const openAged = openList.map(r => ({ r, age: ageOf(r) })).sort((a, b) => b.age - a.age);
   const lateOpen = openAged.filter(x => x.age >= LATE_DAYS).length;
+  const noOwner = openList.filter(r => !r.owner).length;
+
+  const agg = (items) => ({
+    n: items.length,
+    machines: items.reduce((s, r) => s + machinesOf(r), 0),
+    open: items.filter(isOpen).length,
+    downtime: items.reduce((s, r) => s + dt(r), 0),
+  });
+
+  // 1) حسب مرحلة الاكتشاف — كل مراحل المسار بتظهر حتى لو صفر، بترتيب اللوحة
+  const stageNames = new Set(FLOW_STAGES);
+  list.forEach(r => stageNames.add(stageOf(r)));
+  const stages = [...stageNames]
+    .map(s => {
+      const items = list.filter(r => stageOf(r) === s);
+      const phase = items.length ? phaseOf(items[0]) : (s === "Testing" ? PH_TEST : s === "التغليف" ? PH_AFTER : PH_BEFORE);
+      return { stage: s, phase, ...agg(items), p: pct(items.length, total) };
+    })
+    .filter(x => x.n > 0 || FLOW_STAGES.includes(x.stage))
+    .sort((a, b) => stageRank(a.stage) - stageRank(b.stage) || a.stage.localeCompare(b.stage));
+
+  // 2) قبل Testing / Testing / بعد Testing
+  const phases = PHASES.map(ph => {
+    const items = list.filter(r => phaseOf(r) === ph);
+    const days = items.map(daysOf).filter(x => x !== null);
+    return { phase: ph, ...agg(items), p: pct(items.length, total), avgDays: days.length ? days.reduce((a, b) => a + b, 0) / days.length : null };
+  });
+  const before = phases[0], testing = phases[1];
+
+  // 3) تصنيف العيب × المرحلة
+  const cats = DEFECT_CATS.map(c => {
+    const items = list.filter(r => categoryOf(r) === c);
+    const by = {};
+    PHASES.forEach(ph => { by[ph] = items.filter(r => phaseOf(r) === ph).length; });
+    return { cat: c, by, n: items.length, open: items.filter(isOpen).length, machines: items.reduce((s, r) => s + machinesOf(r), 0),
+             jobs: new Set(items.map(r => String(r.jobOrder || "").trim())).size };
+  });
+  // تصنيفات يدوية مش بالقائمة
+  list.forEach(r => {
+    const c = categoryOf(r);
+    if (!cats.some(x => x.cat === c)) cats.push({ cat: c, by: {}, n: 0, open: 0, machines: 0, jobs: 0 });
+  });
+  cats.forEach(x => {
+    if (x.n) return;
+    const items = list.filter(r => categoryOf(r) === x.cat);
+    PHASES.forEach(ph => { x.by[ph] = items.filter(r => phaseOf(r) === ph).length; });
+    Object.assign(x, { n: items.length, open: items.filter(isOpen).length, machines: items.reduce((s, r) => s + machinesOf(r), 0),
+      jobs: new Set(items.map(r => String(r.jobOrder || "").trim())).size });
+  });
+  const catList = cats.filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+
+  // 4) التسلسل اليومي — من أول يوم تسجيل لآخر يوم
+  const dated = list.map(r => toDateSafe(r.createdAt)).filter(Boolean);
+  const daily = [];
+  if (dated.length) {
+    const first = new Date(Math.min(...dated)), last = new Date(Math.max(...dated));
+    const d = new Date(first.getFullYear(), first.getMonth(), first.getDate());
+    while (d <= last) {
+      const k = dayKey(d);
+      const items = list.filter(r => { const x = toDateSafe(r.createdAt); return x && dayKey(x) === k; });
+      const by = {};
+      PHASES.forEach(ph => { by[ph] = items.filter(r => phaseOf(r) === ph).length; });
+      daily.push({ day: k, by, n: items.length, downtime: items.reduce((s, r) => s + dt(r), 0) });
+      d.setDate(d.getDate() + 1);
+    }
+  }
+
+  // 5) منشأ ملاحظات Testing
+  const testList = list.filter(r => phaseOf(r) === PH_TEST);
+  const originNames = [...ORIGINS];
+  testList.forEach(r => { const o = originOf(r); if (!originNames.includes(o)) originNames.push(o); });
+  const origins = originNames.map(o => {
+    const items = testList.filter(r => originOf(r) === o);
+    return { origin: o, n: items.length, p: pct(items.length, testList.length), machines: items.reduce((s, r) => s + machinesOf(r), 0), open: items.filter(isOpen).length };
+  }).filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+  const leak = testList.filter(r => originOf(r) === ORIGIN_ASM).length;
+  const boxIssues = testList.filter(r => originOf(r) === ORIGIN_BOX).length;
 
   // التجميع حسب الحبة (أمر شغل + S/N)
   const units = new Map();
@@ -1868,164 +2065,168 @@ function computeStats(list){
   });
   const unitList = [...units.values()].map(u => {
     u.items.sort((a, b) => tsMillis(a.createdAt) - tsMillis(b.createdAt));
-    u.open = u.items.filter(r => r.status !== "مغلقة").length;
+    u.open = u.items.filter(isOpen).length;
     u.downtime = u.items.reduce((s, r) => s + dt(r), 0);
-    u.machines = Math.max(...u.items.map(machinesOf)); // أكبر عدد ماكنات انذكر على هالحبة/الأيتم
+    u.machines = Math.max(...u.items.map(machinesOf));
     u.first = toDateSafe(u.items[0].createdAt);
     u.last  = toDateSafe(u.items[u.items.length - 1].createdAt);
-    u.dept  = deptLabel(u.items[0].dept);
+    u.stages = [...new Set(u.items.map(stageOf))].sort((a, b) => stageRank(a) - stageRank(b)).join(" ← ");
     return u;
   }).sort((a, b) => b.items.length - a.items.length || tsMillis(a.items[0].createdAt) - tsMillis(b.items[0].createdAt));
   const repeatUnits = unitList.filter(u => u.items.length > 1);
-
-  // باريتو أنواع المشاكل
-  let cum = 0;
-  const pareto = sortedEntries(byType).map(([k, v]) => { cum += v; return { k, v, p: pct(v, total), cum: pct(cum, total) }; });
+  const unitIndex = new Map();
+  unitList.forEach(u => u.items.forEach((r, i) => unitIndex.set(r, `${i + 1} من ${u.items.length}`)));
 
   return {
-    total, byDept, byType, byStatus, byReporter, openByDept, downtimeByDept, totalDowntime,
-    totalMachines, machinesByDept, machinesByType,
-    closed, openList, closureRate: pct(closed.length, total), avgCloseDays,
-    openAged, lateOpen, unitList, repeatUnits, pareto, ageOf
+    total, byType, byStatus, byReporter, totalDowntime, totalMachines,
+    closed, openList, closureRate: pct(closed.length, total), avgCloseDays, noOwner,
+    openAged, lateOpen, unitList, repeatUnits, unitIndex, ageOf, daysOf,
+    stages, phases, before, testing, catList, daily, testList, origins, leak, boxIssues,
+    firstDay: daily.length ? daily[0].day : null, lastDay: daily.length ? daily[daily.length - 1].day : null,
   };
 }
 
 function buildFindings(S){
-  const f = [];
-  if (!S.total) return f;
-  if (S.totalMachines > S.total) f.push(`الـ ${S.total} ملاحظة طالعة على ${S.totalMachines} ماكنة (في ملاحظات مكررة على أكثر من ماكنة من نفس الأيتم).`);
-  const topDept = sortedEntries(S.byDept)[0];
-  if (topDept) f.push(`القسم الأعلى بالملاحظات: ${topDept[0]} — ${topDept[1]} ملاحظة (${fmtPct(pct(topDept[1], S.total))} من الإجمالي).`);
-  const p = S.pareto;
-  if (p.length) {
-    f.push(`نوع المشكلة الأكثر تكراراً: ${p[0].k} — ${p[0].v} ملاحظة (${fmtPct(p[0].p)}).`);
-    const n80 = p.findIndex(x => x.cum >= 0.8) + 1;
-    if (p.length > 2 && n80 && n80 < p.length) {
-      f.push(`${n80} من أصل ${p.length} أنواع مشاكل بتشكّل ${fmtPct(p[n80 - 1].cum)} من الملاحظات — التركيز عليها بيعطي أكبر أثر (باريتو).`);
-    }
+  const f = [], recs = [];
+  if (!S.total) return { findings: f, recs };
+  const B = S.before, T = S.testing;
+  const beforeStages = S.stages.filter(x => x.phase === PH_BEFORE && x.n > 0).sort((a, b) => b.n - a.n);
+  if (B.n) {
+    f.push(`${B.n} من أصل ${S.total} ملاحظة (${fmtPct(B.p)}) انكشفت قبل مرحلة Testing` +
+      (beforeStages.length ? `، أغلبها في ${beforeStages.slice(0, 3).map((x, i) => i ? `${x.stage} (${x.n})` : `مرحلة ${x.stage} (${x.n} ملاحظة)`).join(" ثم ")}.` : "."));
+  } else {
+    f.push(`ولا ملاحظة انكشفت قبل مرحلة Testing بهالفترة — كل الملاحظات طلعت بـ Testing أو بعده.`);
   }
+  const catsBefore = S.catList.filter(c => (c.by[PH_BEFORE] || 0) > 0).sort((a, b) => b.by[PH_BEFORE] - a.by[PH_BEFORE]);
+  if (catsBefore.length) {
+    f.push(`أكثر العيوب قبل Testing: ${catsBefore.slice(0, 2).map(c => `${c.cat} (${c.by[PH_BEFORE]})`).join(" و")}.`);
+  }
+  const wide = S.stages.filter(x => x.n > 0 && x.machines >= 3 * x.n && x.machines >= 10).sort((a, b) => b.machines - a.machines)[0];
+  if (wide) f.push(`ملاحظات ${wide.stage} عددها ${wide.n} بس أثرها واسع (${wide.machines} ماكنة)${wide.open ? `، ومنها ${wide.open} لسا مش مغلقة` : ""}.`);
+  if (T.n) {
+    if (S.leak) f.push(`${S.leak} من ${T.n} ملاحظة في Testing (${fmtPct(pct(S.leak, T.n))}) هي أخطاء تجميع كان المفروض تنكشف في مراحل Layout/Power/Control — تسرّب من الفحص أثناء التصنيع.`);
+    if (S.boxIssues) f.push(`${S.boxIssues} ملاحظة في Testing سببها دهان/تصنيع البوكس — قبل ما يدخل قسم اللوحات.`);
+  }
+  const rep = S.catList.filter(c => c.cat !== CAT_OTHER && c.jobs >= 3).sort((a, b) => b.jobs - a.jobs)[0];
+  if (rep) f.push(`"${rep.cat}" تكرر على ${rep.jobs} أوامر شغل مختلفة — مشكلة نظام مش حالة فردية.`);
   if (S.repeatUnits.length) {
     const u = S.repeatUnits[0];
     f.push(`${S.repeatUnits.length} حبة عليها أكثر من ملاحظة؛ الأعلى: ${unitLabelOf(u.jobOrder, u.serial)} بـ ${u.items.length} ملاحظات.`);
-  } else {
-    f.push("ما في ولا حبة عليها أكثر من ملاحظة بهالفترة.");
   }
   f.push(`نسبة الإغلاق ${fmtPct(S.closureRate)} (${S.closed.length} من ${S.total})` +
     (S.avgCloseDays !== null ? `، ومتوسط مدة الإغلاق ${S.avgCloseDays.toFixed(1)} يوم.` : "."));
   if (S.lateOpen) f.push(`${S.lateOpen} ملاحظة مفتوحة صار عمرها ${LATE_DAYS} أيام أو أكثر — بتحتاج متابعة مع الجهة المسؤولة.`);
-  const noOwner = S.openList.filter(r => !r.owner).length;
-  if (noOwner) f.push(`${noOwner} ملاحظة مفتوحة بدون مسؤول متابعة محدد.`);
-  const topDt = sortedEntries(S.downtimeByDept)[0];
-  if (topDt && topDt[1] > 0) f.push(`القسم الأعلى بساعات التوقف: ${topDt[0]} — ${round1(topDt[1])} ساعة من أصل ${round1(S.totalDowntime)}.`);
-  return f;
+  if (S.noOwner) f.push(`${S.noOwner} ملاحظة مفتوحة بدون مسؤول متابعة محدد.`);
+  const topDt = S.stages.filter(x => x.downtime > 0).sort((a, b) => b.downtime - a.downtime)[0];
+  if (topDt) f.push(`المرحلة الأعلى بساعات التوقف: ${topDt.stage} — ${round1(topDt.downtime)} ساعة من أصل ${round1(S.totalDowntime)}.`);
+  const topType = sortedEntries(S.byType)[0];
+  if (topType && pct(topType[1], S.total) >= 0.8 && S.total >= 5) {
+    f.push(`${fmtPct(pct(topType[1], S.total))} من الملاحظات نوعها "${topType[0]}" بالنظام، لهيك "تصنيف العيب" بيوضّح طبيعة الخطأ الفعلية ومكان معالجته.`);
+  }
+
+  const catTop = (c) => catsBefore.slice(0, 2).some(x => x.cat === c) || (S.catList[0] && S.catList[0].cat === c);
+  if (catTop(CAT_DRAWING)) recs.push("Checklist تحقق مطابقة المخطط قبل إغلاق مرحلة Control");
+  if (catTop(CAT_WIRING) || S.leak) recs.push("نقطة توقف إلزامية (Hold Point) لفحص عزم الشد والتيرمينيشن قبل Testing");
+  if (S.boxIssues) recs.push("فحص استلام للبوكس من قسم الدهان قبل بدء التجميع");
+  if (catTop(CAT_MATERIAL)) recs.push("تأكيد اكتمال المواد والملصقات قبل بدء كل مرحلة");
+  if (S.noOwner) recs.push("تحديد مسؤول لكل ملاحظة مفتوحة فوراً");
+  if (S.lateOpen) recs.push(`متابعة أسبوعية للملاحظات المفتوحة أكثر من ${LATE_DAYS} أيام`);
+  return { findings: f, recs };
 }
 
-const CHART_COLORS = ["#065A82", "#1C7293", "#E8A33D", "#21295C", "#B3432E", "#1E7A4C", "#7A5316"];
+/* ---- إعدادات الرسوم (نفسها للشاشة وللتقرير) ---- */
+const CHART_COLORS = ["#065A82", "#1C7293", "#E8A33D", "#21295C", "#B3432E", "#1E7A4C", "#7A5316", "#8A96A3"];
 const STATUS_COLORS = { "مفتوحة": "#B3432E", "قيد المعالجة": "#C6821E", "مغلقة": "#1E7A4C" };
 
-function renderAnalysisSummary(){
-  const list = getRecordsInRange();
-
-  if (list.length === 0) {
-    analysisEmpty.style.display = "block";
-    analysisContent.style.display = "none";
-    return;
-  }
-  analysisEmpty.style.display = "none";
-  analysisContent.style.display = "block";
-
-  const chartsOk = typeof Chart !== "undefined";
-  document.getElementById("chartsUnavailableNotice").style.display = chartsOk ? "none" : "block";
-  document.querySelectorAll(".chart-wrap").forEach(el => {
-    el.closest(".card").style.display = chartsOk ? "block" : "none";
-  });
-
-  const S = computeStats(list);
-
-  const breakdownHtml = (counts) => sortedEntries(counts)
-    .map(([k, v]) => `<div class="breakdown-row"><span>${escapeHtml(k)}</span><span class="n">${v}</span></div>`)
-    .join("");
-
-  document.getElementById("statGrid").innerHTML = `
-    <div class="stat-box"><div class="num">${S.total}</div><div class="lbl">عدد الملاحظات</div></div>
-    <div class="stat-box"><div class="num">${S.totalMachines}</div><div class="lbl">الماكنات المتأثرة</div></div>
-    <div class="stat-box"><div class="num">${fmtPct(S.closureRate)}</div><div class="lbl">نسبة الإغلاق</div></div>
-    <div class="stat-box"><div class="num">${S.openList.length}</div><div class="lbl">لسا مفتوحة</div></div>
-    <div class="stat-box"><div class="num">${round1(S.totalDowntime)}</div><div class="lbl">إجمالي ساعات التوقف</div></div>
-    <div class="stat-box"><div class="num">${S.avgCloseDays !== null ? S.avgCloseDays.toFixed(1) : "—"}</div><div class="lbl">متوسط أيام الإغلاق</div></div>
-    <div class="stat-box"><div class="num" style="color:${S.lateOpen ? "var(--danger)" : "var(--navy)"}">${S.lateOpen}</div><div class="lbl">مفتوحة أكثر من ${LATE_DAYS} أيام</div></div>
-    <div class="stat-box"><div class="num">${S.repeatUnits.length}</div><div class="lbl">حبات عليها أكثر من ملاحظة</div></div>
-  `;
-
-  document.getElementById("findingsList").innerHTML =
-    buildFindings(S).map(t => `<div class="breakdown-row"><span>• ${escapeHtml(t)}</span></div>`).join("");
-
-  document.getElementById("breakdownDept").innerHTML = breakdownHtml(S.byDept);
-  document.getElementById("breakdownType").innerHTML = breakdownHtml(S.byType);
-  document.getElementById("breakdownStatus").innerHTML = breakdownHtml(S.byStatus);
-
-  document.getElementById("breakdownUnits").innerHTML = S.repeatUnits.length
-    ? S.repeatUnits.slice(0, 10).map(u =>
-        `<div class="breakdown-row"><span><bdi>${escapeHtml(unitLabelOf(u.jobOrder, u.serial))}</bdi> · <bdi>${escapeHtml(u.dept)}</bdi>${u.open ? ` · ${u.open} مفتوحة` : ""}</span><span class="n">${u.items.length}</span></div>`).join("")
-    : `<div class="hint">كل حبة عليها ملاحظة وحدة بس بهالفترة.</div>`;
-
-  document.getElementById("breakdownAging").innerHTML = S.openAged.length
-    ? S.openAged.slice(0, 10).map(({ r, age }) =>
-        `<div class="breakdown-row aging-row"><span><bdi>${escapeHtml(r.recordId || "")}</bdi> · <bdi>${escapeHtml(deptLabel(r.dept))}</bdi> · <bdi>${escapeHtml(unitLabelOf(r.jobOrder, r.serialNumber))}</bdi>${r.owner ? ` · ${escapeHtml(r.owner)}` : ""}</span><span class="n ${age >= LATE_DAYS ? "late" : ""}">${age} يوم</span></div>`).join("")
-    : `<div class="hint">ما في ملاحظات مفتوحة بهالفترة 👍</div>`;
-
-  const deptLabels = Object.keys(S.byDept);
-  renderOrUpdateChart("chartByDept", {
+// نص عربي فيه كلمة إنجليزية (مثل "قبل Testing") — نجبره يتعرض من اليمين لليسار بالرسم
+function rtlTxt(t){ t = String(t); return (/[\u0600-\u06FF]/.test(t) && /[A-Za-z]/.test(t)) ? "\u202B" + t + "\u202C" : t; }
+function rtlCfg(cfg){
+  const d = cfg.data;
+  if (d.labels) d.labels = d.labels.map(rtlTxt);
+  d.datasets.forEach(ds => { if (ds.label) ds.label = rtlTxt(ds.label); });
+  return cfg;
+}
+function chartConfigs(S){
+  const base = { responsive: true, maintainAspectRatio: false };
+  const out = {};
+  out.chartStage = { title: "الملاحظات حسب مرحلة الاكتشاف", config: {
     type: "bar",
-    data: { labels: deptLabels, datasets: [{ data: Object.values(S.byDept), backgroundColor: CHART_COLORS, borderRadius: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
-  });
-
-  // باريتو: أعمدة العدد + خط النسبة التراكمية
-  renderOrUpdateChart("chartByType", {
-    type: "bar",
-    data: {
-      labels: S.pareto.map(x => x.k),
-      datasets: [
-        { type: "bar", label: "العدد", data: S.pareto.map(x => x.v), backgroundColor: "#065A82", borderRadius: 6, yAxisID: "y", order: 2 },
-        { type: "line", label: "التراكمي %", data: S.pareto.map(x => Math.round(x.cum * 100)), borderColor: "#E8A33D", backgroundColor: "#E8A33D", yAxisID: "y1", order: 1, tension: 0.2, pointRadius: 3 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: "bottom" } },
-      scales: {
-        y:  { beginAtZero: true, ticks: { precision: 0 } },
-        y1: { position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { callback: (v) => v + "%" } }
-      }
-    }
-  });
-
-  const statusLabels = Object.keys(S.byStatus);
-  renderOrUpdateChart("chartByStatus", {
+    data: { labels: S.stages.map(x => x.stage), datasets: [{ label: "عدد الملاحظات", data: S.stages.map(x => x.n), backgroundColor: S.stages.map(x => PHASE_COLORS[x.phase]), borderRadius: 6 }] },
+    options: { ...base, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  }};
+  out.chartPhase = { title: "قبل Testing مقابل Testing وما بعده", config: {
     type: "doughnut",
-    data: { labels: statusLabels, datasets: [{ data: Object.values(S.byStatus), backgroundColor: statusLabels.map(s => STATUS_COLORS[s] || "#5B6672") }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
-  });
-
-  const deptDowntimeLabels = Object.keys(S.downtimeByDept);
-  renderOrUpdateChart("chartDowntime", {
+    data: { labels: S.phases.map(x => x.phase), datasets: [{ data: S.phases.map(x => x.n), backgroundColor: S.phases.map(x => PHASE_COLORS[x.phase]) }] },
+    options: { ...base, plugins: { legend: { position: "bottom" } } }
+  }};
+  out.chartCats = { title: "تصنيف العيب حسب مرحلة الاكتشاف", config: {
     type: "bar",
-    data: { labels: deptDowntimeLabels, datasets: [{ data: Object.values(S.downtimeByDept), backgroundColor: "#E8A33D", borderRadius: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-  });
+    data: { labels: S.catList.map(x => x.cat), datasets: PHASES.map(ph => ({ label: ph, data: S.catList.map(x => x.by[ph] || 0), backgroundColor: PHASE_COLORS[ph] })) },
+    options: { ...base, indexAxis: "y", plugins: { legend: { position: "bottom" } }, scales: { x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }, y: { stacked: true } } }
+  }};
+  out.chartDaily = { title: "الملاحظات اليومية خلال الفترة", config: {
+    type: "bar",
+    data: { labels: S.daily.map(x => ddmm(x.day)), datasets: PHASES.map(ph => ({ label: ph, data: S.daily.map(x => x.by[ph] || 0), backgroundColor: PHASE_COLORS[ph] })) },
+    options: { ...base, plugins: { legend: { position: "bottom" } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } } }
+  }};
+  if (S.origins.length) out.chartOrigin = { title: "ملاحظات Testing: منشأ الخطأ", config: {
+    type: "bar",
+    data: { labels: S.origins.map(x => x.origin.replace(" (Layout/Power/Control)", "").replace(" (قبل دخول القسم)", "")), datasets: [{ data: S.origins.map(x => x.n), backgroundColor: "#E8A33D", borderRadius: 6 }] },
+    options: { ...base, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+  }};
+  const dtStages = S.stages.filter(x => x.n > 0);
+  out.chartDowntime = { title: "ساعات التوقف حسب المرحلة", config: {
+    type: "bar",
+    data: { labels: dtStages.map(x => x.stage), datasets: [{ data: dtStages.map(x => round1(x.downtime)), backgroundColor: "#1C7293", borderRadius: 6 }] },
+    options: { ...base, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  }};
+  const st = Object.keys(S.byStatus);
+  out.chartStatus = { title: "توزيع الحالات", config: {
+    type: "doughnut",
+    data: { labels: st, datasets: [{ data: Object.values(S.byStatus), backgroundColor: st.map(s => STATUS_COLORS[s] || "#5B6672") }] },
+    options: { ...base, plugins: { legend: { position: "bottom" } } }
+  }};
+  Object.values(out).forEach(c => rtlCfg(c.config));
+  return out;
 }
 
-/* =====================================================================
-   تقرير Excel (ExcelJS) — مع صورة كل ملاحظة داخل الملف
-   صفحات التقرير: الملخص (مؤشرات + أبرز النتائج + جداول + رسوم) /
-   الملاحظات (كل ملاحظة مع صورتها، مجمّعة حسب الحبة) / حسب الحبة / المفتوحة
-   ===================================================================== */
+// رسم صورة PNG لكل رسم بياني للتقرير (على كانفاس مخفي بخلفية بيضاء)
+const XL_CHART_W = 960, XL_CHART_H = 520;
+function renderReportCharts(S, ChartLib, makeCanvas){
+  if (!ChartLib) return [];
+  const prevSize = ChartLib.defaults.font.size;
+  ChartLib.defaults.font.size = 17;
+  const bg = { id: "xlWhiteBg", beforeDraw(c){ const x = c.ctx; x.save(); x.fillStyle = "#FFFFFF"; x.fillRect(0, 0, c.width, c.height); x.restore(); } };
+  const out = [];
+  try {
+    const cfgs = chartConfigs(S);
+    ["chartStage", "chartPhase", "chartCats", "chartDaily", "chartOrigin", "chartDowntime"].forEach(id => {
+      const c = cfgs[id];
+      if (!c) return;
+      const canvas = makeCanvas(XL_CHART_W, XL_CHART_H);
+      const cfg = { ...c.config, plugins: [bg], options: { ...c.config.options, responsive: false, animation: false, devicePixelRatio: 1 } };
+      const ctx = canvas.getContext("2d");
+      try { ctx.direction = "rtl"; } catch (e) {} // الكانفاس المخفي افتراضياً LTR — بدونها "قبل Testing" بتنقلب
+      const ch = new ChartLib(ctx, cfg);
+      out.push({ title: c.title, base64: canvas.toDataURL("image/png").split(",")[1], w: XL_CHART_W, h: XL_CHART_H });
+      ch.destroy();
+    });
+  } catch (e) {
+    console.error("chart render error", e);
+  } finally {
+    ChartLib.defaults.font.size = prevSize;
+  }
+  return out;
+}
+
+/* ---- تنسيق Excel ---- */
 const XL = {
   navy: "FF21295C", deep: "FF065A82", teal: "FF1C7293", amber: "FFE8A33D",
   light: "FFEEF3F5", line: "FFD5DEE3", white: "FFFFFFFF", muted: "FF5B6672",
-  openFill: "FFFBE8E4", wipFill: "FFFBEED9", okFill: "FFE1F2E8", groupFill: "FFF3F8FA", danger: "FFB3432E"
+  openFill: "FFFBE8E4", wipFill: "FFFBEED9", okFill: "FFE1F2E8", groupFill: "FFF3F8FA", danger: "FFB3432E",
+  phBefore: "FFE3EEF4", phTest: "FFFBEED9", phAfter: "FFECEFF2", total: "FFD9E2EC"
 };
+const PHASE_FILL = { [PH_BEFORE]: XL.phBefore, [PH_TEST]: XL.phTest, [PH_AFTER]: XL.phAfter };
 const XL_FONT = "Arial";
 const XL_BORDER = {
   top:    { style: "thin", color: { argb: XL.line } },
@@ -2039,18 +2240,21 @@ const XL_TEAM = "Quality Team in Electrical Panel";
 function xlDate(d){
   return d ? new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds())) : null;
 }
-function fmtTime(d){ return d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : ""; }
+function xlDay(d){ return d ? new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) : null; }
+function xlKey(k){ const [y, m, d] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); }
+function hhmm(d){ return d ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : ""; }
 function statusFill(s){ return s === "مغلقة" ? XL.okFill : s === "قيد المعالجة" ? XL.wipFill : XL.openFill; }
 function fill(argb){ return { type: "pattern", pattern: "solid", fgColor: { argb } }; }
 
-function styleHeaderRow(row){
-  row.eachCell(c => {
-    c.font = { name: XL_FONT, bold: true, color: { argb: XL.white }, size: 11 };
+function styleHeaderRow(row, n){
+  for (let i = 1; i <= n; i++) {
+    const c = row.getCell(i);
+    c.font = { name: XL_FONT, bold: true, color: { argb: XL.white }, size: 10.5 };
     c.fill = fill(XL.navy);
-    c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    c.alignment = { vertical: "middle", horizontal: "center", wrapText: true, readingOrder: "rtl" };
     c.border = XL_BORDER;
-  });
-  row.height = 34;
+  }
+  row.height = 32;
 }
 function styleBodyCell(c, opts = {}){
   c.font = { name: XL_FONT, size: 10.5, ...(opts.font || {}) };
@@ -2059,28 +2263,29 @@ function styleBodyCell(c, opts = {}){
   if (opts.fill) c.fill = fill(opts.fill);
   if (opts.fmt) c.numFmt = opts.fmt;
 }
-
-function loadImageSize(dataUrl){
-  return new Promise(res => {
-    const img = new Image();
-    img.onload  = () => res({ w: img.naturalWidth, h: img.naturalHeight });
-    img.onerror = () => res(null);
-    img.src = dataUrl;
-  });
+function sectionTitle(ws, r, text, cols){
+  ws.mergeCells(r, 1, r, cols);
+  const t = ws.getCell(r, 1);
+  t.value = text;
+  t.font = { name: XL_FONT, bold: true, size: 12, color: { argb: XL.white } };
+  t.fill = fill(XL.teal);
+  t.alignment = { horizontal: "right", vertical: "middle", readingOrder: "rtl", indent: 1 };
+  ws.getRow(r).height = 24;
 }
+
 function fitBox(w, h, maxW, maxH){
   const s = Math.min(maxW / w, maxH / h, 1);
   return { width: Math.round(w * s), height: Math.round(h * s) };
 }
 
 // تسجيل كل صورة مرة وحدة بالملف — وبنقدر نعرضها بأكثر من صفحة بدون ما يكبر حجم الملف
-async function registerPhotos(wb, list){
+async function registerPhotos(wb, list, sizeFn){
   const map = new Map();
   for (const r of list) {
     if (!r.photoUrl) continue;
     const m = String(r.photoUrl).match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i);
     if (!m) continue;
-    const size = await loadImageSize(r.photoUrl);
+    const size = await sizeFn(r.photoUrl);
     if (!size || !size.w) continue;
     const ext = m[1].toLowerCase() === "jpg" ? "jpeg" : m[1].toLowerCase();
     map.set(r.id, { imageId: wb.addImage({ base64: m[2], extension: ext }), w: size.w, h: size.h });
@@ -2092,47 +2297,28 @@ function placePhoto(ws, info, col0, row0, maxW, maxH){
   ws.addImage(info.imageId, { tl: { col: col0 + 0.08, row: row0 + 0.08 }, ext, editAs: "oneCell" });
 }
 
-// صورة الرسوم البيانية من شاشة التحليل (على خلفية بيضاء)
-function captureCharts(){
-  if (typeof Chart === "undefined") return [];
-  return [
-    ["chartByDept",   "الملاحظات حسب القسم"],
-    ["chartByType",   "باريتو أنواع المشاكل"],
-    ["chartByStatus", "توزيع الحالات"],
-    ["chartDowntime", "ساعات التوقف حسب القسم"],
-  ].map(([id, title]) => {
-    const c = document.getElementById(id);
-    if (!c || !chartInstances[id] || !c.width || !c.height) return null;
-    const tmp = document.createElement("canvas");
-    tmp.width = c.width; tmp.height = c.height;
-    const ctx = tmp.getContext("2d");
-    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, tmp.width, tmp.height);
-    ctx.drawImage(c, 0, 0);
-    return { title, base64: tmp.toDataURL("image/png").split(",")[1], w: c.width, h: c.height };
-  }).filter(Boolean);
-}
-
-function writeTable(ws, startRow, title, headers, rows, colFmts = []){
+/* جدول بعنوان: rows = مصفوفة قيم؛ opts: fmts, totals (سطر إجمالي), rowFill(i,row) */
+function writeTable(ws, startRow, title, headers, rows, opts = {}){
+  const n = opts.cols || headers.length;
   let r = startRow;
-  ws.mergeCells(r, 1, r, headers.length);
-  const t = ws.getCell(r, 1);
-  t.value = title;
-  t.font = { name: XL_FONT, bold: true, size: 12, color: { argb: XL.teal } };
-  t.alignment = { horizontal: "right", vertical: "middle", readingOrder: "rtl" };
-  ws.getRow(r).height = 24;
+  sectionTitle(ws, r, title, n);
   r++;
   const hr = ws.getRow(r);
   headers.forEach((h, i) => { hr.getCell(i + 1).value = h; });
-  styleHeaderRow(hr);
-  hr.height = 26;
+  styleHeaderRow(hr, headers.length);
   r++;
-  rows.forEach((vals, idx) => {
+  const fmts = opts.fmts || [];
+  const all = rows.map((v, i) => ({ v, i, total: false }));
+  if (opts.totals && rows.length) all.push({ v: opts.totals, i: rows.length, total: true });
+  all.forEach(({ v, i, total }) => {
     const row = ws.getRow(r);
-    vals.forEach((v, i) => {
-      const c = row.getCell(i + 1);
-      c.value = v;
-      styleBodyCell(c, { h: i === 0 ? "right" : "center", fmt: colFmts[i], fill: idx % 2 ? XL.groupFill : null });
+    const rf = total ? XL.total : (opts.rowFill ? opts.rowFill(i, v) : (i % 2 ? XL.groupFill : null));
+    v.forEach((val, j) => {
+      const c = row.getCell(j + 1);
+      c.value = val;
+      styleBodyCell(c, { h: j === 0 ? "right" : "center", fmt: fmts[j], fill: rf, font: (total || j === 0) ? { bold: true } : {} });
     });
+    row.height = opts.rowHeight || 20;
     r++;
   });
   if (!rows.length) {
@@ -2145,156 +2331,220 @@ function writeTable(ws, startRow, title, headers, rows, colFmts = []){
   return r + 1;
 }
 
-function buildSummarySheet(wb, S, meta, charts){
-  const ws = wb.addWorksheet("الملخص", {
+/* ---- الورقة 1: التقرير ---- */
+function buildReportSheet(wb, S, meta, charts){
+  const ws = wb.addWorksheet("التقرير", {
     views: [{ rightToLeft: true, showGridLines: false }],
-    pageSetup: { orientation: "portrait", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+    pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
+    properties: { tabColor: { argb: XL.navy } }
   });
-  ws.columns = [
-    { width: 26 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
-    { width: 3 }, ...Array.from({ length: 8 }, () => ({ width: 10 }))
-  ];
+  const NC = 7;
+  ws.columns = [{ width: 36 }, ...Array.from({ length: NC - 1 }, () => ({ width: 15 })), { width: 3 }, ...Array.from({ length: 9 }, () => ({ width: 9.5 }))];
 
   let r = 1;
-  ws.mergeCells(r, 1, r, 8);
+  ws.mergeCells(r, 1, r, NC);
   Object.assign(ws.getCell(r, 1), {
-    value: `${XL_TEAM} — تقرير ملاحظات الإنتاج`,
+    value: `${XL_TEAM} — تقرير ملاحظات الإنتاج ومراحل اكتشاف الأخطاء`,
     font: { name: XL_FONT, bold: true, size: 16, color: { argb: XL.white } },
     fill: fill(XL.navy),
     alignment: { horizontal: "center", vertical: "middle", readingOrder: "rtl" }
   });
   ws.getRow(r).height = 36; r++;
 
-  ws.mergeCells(r, 1, r, 8);
-  Object.assign(ws.getCell(r, 1), {
-    value: `الفترة: من ${meta.from} إلى ${meta.to}   |   تاريخ الإصدار: ${meta.generated}   |   أعدّه: ${meta.by || "—"}`,
-    font: { name: XL_FONT, size: 10.5, color: { argb: XL.muted } },
-    alignment: { horizontal: "center", vertical: "middle", readingOrder: "rtl" }
+  const daysTxt = S.firstDay ? `أيام التسجيل الفعلية: ${ddmmyyyy(S.firstDay)} – ${ddmmyyyy(S.lastDay)} (${S.daily.length} يوم)` : "";
+  const lines = [
+    `الفترة: ${meta.from} – ${meta.to}   |   ${daysTxt}`,
+    `تاريخ الإصدار: ${meta.generated}   |   أعدّه: ${meta.by || "—"}${meta.team && meta.team.length ? `   |   فريق التسجيل: ${meta.team.join("، ")}` : ""}`,
+  ];
+  lines.forEach(t => {
+    ws.mergeCells(r, 1, r, NC);
+    Object.assign(ws.getCell(r, 1), {
+      value: t, font: { name: XL_FONT, size: 10.5, color: { argb: XL.muted } },
+      fill: fill(XL.light), alignment: { horizontal: "center", vertical: "middle", wrapText: true, readingOrder: "rtl" }
+    });
+    ws.getRow(r).height = 20; r++;
   });
-  ws.getRow(r).height = 22; r += 2;
-
-  // ---- المؤشرات الرئيسية (بطاقات) ----
-  ws.mergeCells(r, 1, r, 8);
-  Object.assign(ws.getCell(r, 1), { value: "المؤشرات الرئيسية", font: { name: XL_FONT, bold: true, size: 12, color: { argb: XL.teal } }, alignment: { horizontal: "right", readingOrder: "rtl" } });
   r++;
-  const kpis = [
+
+  // ---- بطاقات المؤشرات: سطر عام + سطر "قبل Testing" ----
+  const tiles = (title, items, accent) => {
+    sectionTitle(ws, r, title, NC); r++;
+    const vr = r, lr = r + 1;
+    items.forEach(([val, lbl, fmt, color], j) => {
+      const vc = ws.getCell(vr, j + 1), lc = ws.getCell(lr, j + 1);
+      vc.value = val; vc.numFmt = fmt;
+      vc.font = { name: XL_FONT, bold: true, size: 18, color: { argb: color || XL.navy } };
+      vc.alignment = { horizontal: "center", vertical: "middle" };
+      vc.fill = fill(XL.light);
+      vc.border = { top: { style: "medium", color: { argb: accent } }, left: { style: "thin", color: { argb: XL.white } }, right: { style: "thin", color: { argb: XL.white } } };
+      lc.value = lbl;
+      lc.font = { name: XL_FONT, size: 9.5, color: { argb: XL.muted } };
+      lc.alignment = { horizontal: "center", vertical: "top", wrapText: true, readingOrder: "rtl" };
+      lc.fill = fill(XL.light);
+      lc.border = { left: { style: "thin", color: { argb: XL.white } }, right: { style: "thin", color: { argb: XL.white } } };
+    });
+    ws.getRow(vr).height = 34; ws.getRow(lr).height = 28;
+    r += 3;
+  };
+  tiles("المؤشرات العامة", [
     [S.total, "إجمالي الملاحظات", "0"],
     [S.totalMachines, "الماكنات المتأثرة", "0"],
     [S.closureRate, "نسبة الإغلاق", "0%"],
-    [S.openList.length, "ملاحظات لسا مفتوحة", "0", S.openList.length ? XL.danger : null],
+    [S.openList.length, "لسا مفتوحة", "0", S.openList.length ? XL.danger : null],
     [round1(S.totalDowntime), "إجمالي ساعات التوقف", "0.0"],
     [S.avgCloseDays !== null ? round1(S.avgCloseDays) : "—", "متوسط أيام الإغلاق", "0.0"],
     [S.lateOpen, `مفتوحة أكثر من ${LATE_DAYS} أيام`, "0", S.lateOpen ? XL.danger : null],
+  ], XL.navy);
+  tiles("التركيز: ما قبل مرحلة Testing", [
+    [S.before.n, "ملاحظات قبل Testing", "0"],
+    [S.before.p, "نسبة ما قبل Testing", "0%"],
+    [S.before.machines, "ماكنات متأثرة قبل Testing", "0"],
+    [S.before.open, "مفتوحة قبل Testing", "0", S.before.open ? XL.danger : null],
+    [round1(S.before.downtime), "ساعات توقف قبل Testing", "0.0"],
+    [S.leak, "أخطاء تجميع وصلت لـ Testing", "0", S.leak ? XL.danger : null],
     [S.repeatUnits.length, "حبات عليها أكثر من ملاحظة", "0"],
-  ];
-  // البطاقات: 4 بالسطر، كل بطاقة عمودين (العمود الأول عريض فبنعطيه بطاقة لحاله)
-  const tileCols = [[1, 1], [2, 3], [4, 5], [6, 8]];
-  for (let i = 0; i < kpis.length; i += 4) {
-    const vr = r, lr = r + 1;
-    kpis.slice(i, i + 4).forEach(([val, lbl, fmt, color], j) => {
-      const [c1, c2] = tileCols[j];
-      if (c2 > c1) { ws.mergeCells(vr, c1, vr, c2); ws.mergeCells(lr, c1, lr, c2); }
-      const vc = ws.getCell(vr, c1), lc = ws.getCell(lr, c1);
-      vc.value = val; vc.numFmt = fmt;
-      vc.font = { name: XL_FONT, bold: true, size: 20, color: { argb: color || XL.navy } };
-      vc.alignment = { horizontal: "center", vertical: "middle" };
-      vc.fill = fill(XL.light);
-      lc.value = lbl;
-      lc.font = { name: XL_FONT, size: 10, color: { argb: XL.muted } };
-      lc.alignment = { horizontal: "center", vertical: "top", wrapText: true, readingOrder: "rtl" };
-      lc.fill = fill(XL.light);
-      for (let c = c1; c <= c2; c++) {
-        ws.getCell(vr, c).border = { top: { style: "medium", color: { argb: XL.amber } } };
-      }
-    });
-    ws.getRow(vr).height = 38; ws.getRow(lr).height = 22;
-    r += 3;
-  }
+  ], XL.amber);
 
-  // ---- أبرز النتائج ----
-  ws.mergeCells(r, 1, r, 8);
-  Object.assign(ws.getCell(r, 1), { value: "أبرز النتائج", font: { name: XL_FONT, bold: true, size: 12, color: { argb: XL.teal } }, alignment: { horizontal: "right", readingOrder: "rtl" } });
-  r++;
-  buildFindings(S).forEach(t => {
-    ws.mergeCells(r, 1, r, 8);
+  const tableStart = r;
+  const phFill = (i, v, list) => PHASE_FILL[list[i].phase] || null;
+
+  // 1) حسب مرحلة الاكتشاف
+  r = writeTable(ws, r, "1) الملاحظات حسب مرحلة الاكتشاف (بترتيب مسار اللوحة)",
+    ["مرحلة الاكتشاف", "التصنيف", "عدد الملاحظات", "النسبة", "الماكنات المتأثرة", "مفتوحة", "ساعات التوقف"],
+    S.stages.map(x => [x.stage, x.phase, x.n, x.p, x.machines, x.open, round1(x.downtime)]),
+    { fmts: [null, null, "0", "0%", "0", "0", "0.0"], rowFill: (i) => phFill(i, null, S.stages),
+      totals: ["الإجمالي", "", S.total, 1, S.totalMachines, S.openList.length, round1(S.totalDowntime)] });
+
+  // 2) قبل / Testing / بعد
+  r = writeTable(ws, r, "2) توزيع الملاحظات: قبل Testing مقابل Testing وما بعده",
+    ["المرحلة", "عدد الملاحظات", "النسبة", "الماكنات المتأثرة", "مفتوحة", "ساعات التوقف", "متوسط أيام الإغلاق/العمر"],
+    S.phases.map(x => [x.phase, x.n, x.p, x.machines, x.open, round1(x.downtime), x.avgDays === null ? "—" : round1(x.avgDays)]),
+    { fmts: [null, "0", "0%", "0", "0", "0.0", "0.0"], rowFill: (i) => PHASE_FILL[S.phases[i].phase] });
+
+  // 3) تصنيف العيب
+  r = writeTable(ws, r, "3) تصنيف العيب: وين انكشف؟",
+    ["تصنيف العيب", PH_BEFORE, PH_TEST, PH_AFTER, "الإجمالي", "% من ما قبل Testing", "مفتوحة"],
+    S.catList.map(x => [x.cat, x.by[PH_BEFORE] || 0, x.by[PH_TEST] || 0, x.by[PH_AFTER] || 0, x.n, pct(x.by[PH_BEFORE] || 0, S.before.n), x.open]),
+    { fmts: [null, "0", "0", "0", "0", "0%", "0"],
+      totals: ["الإجمالي", S.before.n, S.testing.n, S.phases[2].n, S.total, S.before.n ? 1 : 0, S.openList.length] });
+
+  // 4) التسلسل اليومي
+  r = writeTable(ws, r, "4) التسلسل الزمني اليومي للملاحظات",
+    ["التاريخ", PH_BEFORE, PH_TEST, PH_AFTER, "الإجمالي", "ساعات التوقف"],
+    S.daily.map(x => [xlKey(x.day), x.by[PH_BEFORE] || 0, x.by[PH_TEST] || 0, x.by[PH_AFTER] || 0, x.n, round1(x.downtime)]),
+    { fmts: ["dd/mm/yyyy (ddd)", "0", "0", "0", "0", "0.0"], cols: NC, rowHeight: 18,
+      rowFill: (i) => S.daily[i].n ? (i % 2 ? XL.groupFill : null) : XL.light,
+      totals: ["الإجمالي", S.before.n, S.testing.n, S.phases[2].n, S.total, round1(S.totalDowntime)] });
+
+  // 5) منشأ ملاحظات Testing
+  r = writeTable(ws, r, "5) ملاحظات Testing: من وين نشأ الخطأ؟ (تحليل التسرّب من المراحل السابقة)",
+    ["المنشأ المقدّر للخطأ", "عدد الملاحظات", "النسبة من ملاحظات Testing", "الماكنات المتأثرة", "مفتوحة"],
+    S.origins.map(x => [x.origin, x.n, x.p, x.machines, x.open]),
+    { fmts: [null, "0", "0%", "0", "0"], cols: NC,
+      totals: S.testing.n ? ["الإجمالي", S.testing.n, 1, S.testing.machines, S.testing.open] : null });
+
+  // 6) الحالة + المسجّل جنب بعض
+  r = writeTable(ws, r, "6) حسب الحالة وحسب المسجّل",
+    ["الحالة", "العدد", "النسبة", "", "المسجّل", "العدد", "النسبة"],
+    (() => {
+      const st = sortedEntries(S.byStatus), rp = sortedEntries(S.byReporter);
+      const n = Math.max(st.length, rp.length);
+      return Array.from({ length: n }, (_, i) => [
+        st[i] ? st[i][0] : "", st[i] ? st[i][1] : "", st[i] ? pct(st[i][1], S.total) : "", "",
+        rp[i] ? rp[i][0] : "", rp[i] ? rp[i][1] : "", rp[i] ? pct(rp[i][1], S.total) : ""
+      ]);
+    })(),
+    { fmts: [null, "0", "0%", null, null, "0", "0%"], rowFill: () => null });
+
+  // 7) أبرز النتائج والتوصيات
+  const { findings, recs } = buildFindings(S);
+  sectionTitle(ws, r, "7) أبرز النتائج والتوصيات", NC); r++;
+  findings.forEach(t => {
+    ws.mergeCells(r, 1, r, NC);
     const c = ws.getCell(r, 1);
     c.value = "•  " + t;
     c.font = { name: XL_FONT, size: 11 };
-    c.alignment = { horizontal: "right", vertical: "middle", wrapText: true, readingOrder: "rtl" };
-    ws.getRow(r).height = t.length > 90 ? 34 : 20;
+    c.alignment = { horizontal: "right", vertical: "middle", wrapText: true, readingOrder: "rtl", indent: 1 };
+    c.border = { bottom: { style: "hair", color: { argb: XL.line } } };
+    ws.getRow(r).height = t.length > 120 ? 36 : 22;
     r++;
   });
+  if (recs.length) {
+    ws.mergeCells(r, 1, r, NC);
+    const c = ws.getCell(r, 1);
+    c.value = "التوصيات: " + recs.map((t, i) => `(${i + 1}) ${t}.`).join("  ");
+    c.font = { name: XL_FONT, size: 11, bold: true, color: { argb: XL.navy } };
+    c.fill = fill(XL.wipFill);
+    c.alignment = { horizontal: "right", vertical: "middle", wrapText: true, readingOrder: "rtl", indent: 1 };
+    ws.getRow(r).height = Math.max(24, Math.ceil(c.value.length / 140) * 17 + 8);
+    r++;
+  }
   r++;
+  ws.mergeCells(r, 1, r, NC);
+  Object.assign(ws.getCell(r, 1), {
+    value: `المصدر: سجلات نظام ${XL_TEAM}. "تصنيف العيب" و"المنشأ المقدّر" تصنيف تلقائي من وصف الملاحظة (بينعدّل يدوياً من "تحديث / تسكير") — للمراجعة.`,
+    font: { name: XL_FONT, size: 9, italic: true, color: { argb: XL.muted } },
+    alignment: { horizontal: "right", wrapText: true, readingOrder: "rtl" }
+  });
+  ws.getRow(r).height = 28;
 
-  // ---- الجداول ----
-  const T = S.total;
-  r = writeTable(ws, r, "حسب القسم",
-    ["القسم", "عدد الملاحظات", "الماكنات المتأثرة", "النسبة", "مفتوحة", "ساعات التوقف"],
-    sortedEntries(S.byDept).map(([k, v]) => [k, v, S.machinesByDept[k] || 0, pct(v, T), S.openByDept[k] || 0, round1(S.downtimeByDept[k])]),
-    [null, "0", "0", "0%", "0", "0.0"]);
-  r = writeTable(ws, r, "باريتو أنواع المشاكل",
-    ["نوع المشكلة", "العدد", "الماكنات المتأثرة", "النسبة", "النسبة التراكمية"],
-    S.pareto.map(x => [x.k, x.v, S.machinesByType[x.k] || 0, x.p, x.cum]),
-    [null, "0", "0", "0%", "0%"]);
-  r = writeTable(ws, r, "حسب الحالة",
-    ["الحالة", "العدد", "النسبة"],
-    sortedEntries(S.byStatus).map(([k, v]) => [k, v, pct(v, T)]),
-    [null, "0", "0%"]);
-  r = writeTable(ws, r, "حسب المسجّل",
-    ["الاسم", "عدد الملاحظات", "النسبة"],
-    sortedEntries(S.byReporter).map(([k, v]) => [k, v, pct(v, T)]),
-    [null, "0", "0%"]);
-
-  // ---- الرسوم البيانية (جنب الجداول) ----
-  let cr = 4; // صف البداية (0-based) للرسوم
+  // ---- الرسوم جنب الجداول ----
+  let cr = tableStart - 1; // 0-based
   charts.forEach(ch => {
-    const t = ws.getCell(cr + 1, 10);
+    const t = ws.getCell(cr + 1, NC + 2);
     t.value = ch.title;
     t.font = { name: XL_FONT, bold: true, size: 11, color: { argb: XL.teal } };
     t.alignment = { horizontal: "right", readingOrder: "rtl" };
     const id = wb.addImage({ base64: ch.base64, extension: "png" });
-    const ext = fitBox(ch.w, ch.h, 520, 280);
-    ws.addImage(id, { tl: { col: 9.1, row: cr + 1.2 }, ext, editAs: "oneCell" });
+    const ext = fitBox(ch.w, ch.h, 560, 300);
+    ws.addImage(id, { tl: { col: NC + 1.1, row: cr + 1.15 }, ext, editAs: "oneCell" });
     cr += Math.ceil(ext.height / 20) + 3;
   });
 
   ws.headerFooter.oddFooter = `&L&8${XL_TEAM}&R&8صفحة &P من &N`;
 }
 
-const REC_COLS = [
-  { h: "#",                       w: 5 },
-  { h: "رقم السجل",               w: 20 },
-  { h: "التاريخ",                 w: 12, fmt: "dd/mm/yyyy" },
-  { h: "الوقت",                   w: 8 },
-  { h: "القسم",                   w: 12 },
-  { h: "رقم أمر الشغل",           w: 13 },
-  { h: "S/N",                     w: 13 },
-  { h: "عدد الماكنات",            w: 9, fmt: "0" },
-  { h: "ترتيبها على الحبة",       w: 11 },
-  { h: "نوع المشكلة",             w: 12 },
-  { h: "وصف الملاحظة",            w: 42 },
-  { h: "الصورة",                  w: 25 },
-  { h: "الحالة",                  w: 12 },
-  { h: "العمر / مدة الإغلاق (يوم)", w: 12, fmt: "0" },
-  { h: "المسؤول",                 w: 16 },
-  { h: "الإجراء المتخذ",          w: 34 },
-  { h: "ساعات التوقف",            w: 10, fmt: "0.0" },
-  { h: "المسجّل",                 w: 16 },
-  { h: "تاريخ الإغلاق",           w: 12, fmt: "dd/mm/yyyy" },
-];
-const PHOTO_ROW_PT = 100;        // ارتفاع صف فيه صورة (نقطة) ≈ 133 بكسل
-const PHOTO_MAX = [168, 124];    // أقصى أبعاد للصورة داخل الخلية (بكسل)
-
-function setupTableSheet(ws, cols){
+/* ---- أوراق الجداول ---- */
+function setupTableSheet(ws, cols, titleText){
   ws.columns = cols.map(c => ({ width: c.w }));
-  const hr = ws.getRow(1);
+  let hdrRow = 1;
+  if (titleText) {
+    ws.mergeCells(1, 1, 1, cols.length);
+    Object.assign(ws.getCell(1, 1), {
+      value: titleText,
+      font: { name: XL_FONT, bold: true, size: 13, color: { argb: XL.white } },
+      fill: fill(XL.navy),
+      alignment: { horizontal: "right", vertical: "middle", readingOrder: "rtl", indent: 1 }
+    });
+    ws.getRow(1).height = 28;
+    hdrRow = 2;
+  }
+  const hr = ws.getRow(hdrRow);
   cols.forEach((c, i) => { hr.getCell(i + 1).value = c.h; });
-  styleHeaderRow(hr);
-  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
-  ws.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:1" };
+  styleHeaderRow(hr, cols.length);
+  ws.autoFilter = { from: { row: hdrRow, column: 1 }, to: { row: hdrRow, column: cols.length } };
+  ws.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: `${hdrRow}:${hdrRow}`,
+    margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } };
   ws.headerFooter.oddFooter = `&L&8${XL_TEAM}&R&8صفحة &P من &N`;
+  return hdrRow + 1;
 }
-
+function colIndex(cols, h){ return cols.findIndex(c => c.h === h) + 1; }
+function textRowHeight(texts, widths){
+  // تقدير ارتفاع السطر حسب طول النص وعرض العمود
+  let lines = 1;
+  texts.forEach((t, i) => { if (t) lines = Math.max(lines, Math.ceil(String(t).length / Math.max(8, widths[i] * 1.05))); });
+  return Math.min(110, Math.max(20, lines * 14 + 6));
+}
+function groupHeader(ws, r, n, text, argb){
+  ws.mergeCells(r, 1, r, n);
+  const c = ws.getCell(r, 1);
+  c.value = text;
+  c.font = { name: XL_FONT, bold: true, size: 11, color: { argb: XL.navy } };
+  c.fill = fill(argb || XL.light);
+  c.alignment = { horizontal: "right", vertical: "middle", readingOrder: "rtl", indent: 1 };
+  c.border = XL_BORDER;
+  ws.getRow(r).height = 22;
+}
 function photoCellFallback(c, r){
   if (r.photoUrl && /^https?:/i.test(r.photoUrl)) {
     c.value = { text: "فتح الصورة", hyperlink: r.photoUrl };
@@ -2303,118 +2553,376 @@ function photoCellFallback(c, r){
     c.value = "—";
   }
 }
+const PHOTO_ROW_PT = 100;        // ارتفاع صف فيه صورة (نقطة) ≈ 133 بكسل
+const PHOTO_MAX = [168, 124];    // أقصى أبعاد للصورة داخل الخلية (بكسل)
 
-function buildRecordsSheet(wb, S, photos){
-  const ws = wb.addWorksheet("الملاحظات", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1, xSplit: 2 }] });
-  setupTableSheet(ws, REC_COLS);
-  const photoCol = REC_COLS.findIndex(c => c.h === "الصورة");
+const byDate = (a, b) => tsMillis(a.createdAt) - tsMillis(b.createdAt);
 
-  // الحبات مرتبة حسب أول ملاحظة عليها، وملاحظات كل حبة ورا بعض
-  const units = S.unitList.slice().sort((a, b) => (a.first || 0) - (b.first || 0));
-  let rowIdx = 2, n = 1;
-  units.forEach((u, ui) => {
-    u.items.forEach((r, k) => {
-      const d = toDateSafe(r.createdAt), cd = toDateSafe(r.closedAt);
-      const isClosed = r.status === "مغلقة";
-      const age = isClosed ? (cd && d ? Math.max(0, Math.round((cd - d) / DAY_MS)) : null) : S.ageOf(r);
-      const vals = [
-        n++, r.recordId || "", xlDate(d), fmtTime(d), deptLabel(r.dept), r.jobOrder || "", r.serialNumber || "",
-        machinesOf(r), `${k + 1} من ${u.items.length}`, r.issueType || "", r.description || "", null, r.status || "مفتوحة",
-        age, r.owner || "", r.action || "", parseFloat(r.downtime) || 0, r.reporterName || "", isClosed ? xlDate(cd) : null
-      ];
-      const row = ws.getRow(rowIdx);
-      const groupFill = ui % 2 ? XL.groupFill : null;
+/* صفوف ملاحظات مجمّعة (حسب المرحلة أو المنشأ) */
+function writeGroupedRecords(ws, S, cols, groups, startRow, rowVals, opts = {}){
+  let r = startRow, n = 1;
+  const widths = cols.map(c => c.w);
+  const textCols = cols.map((c, i) => c.text ? i : -1).filter(i => i >= 0);
+  groups.forEach(g => {
+    if (!g.items.length) return;
+    groupHeader(ws, r, cols.length, `${g.name}  —  ${g.items.length} ملاحظة${g.machines > g.items.length ? ` على ${g.machines} ماكنة` : ""}`, g.fill);
+    r++;
+    g.items.forEach((rec, k) => {
+      const vals = rowVals(rec, n++);
+      const row = ws.getRow(r);
       vals.forEach((v, i) => {
         const c = row.getCell(i + 1);
         c.value = v;
-        const center = !["وصف الملاحظة", "الإجراء المتخذ"].includes(REC_COLS[i].h);
-        styleBodyCell(c, { h: center ? "center" : "right", fmt: REC_COLS[i].fmt, fill: groupFill });
+        styleBodyCell(c, { h: cols[i].text ? "right" : "center", fmt: cols[i].fmt, fill: k % 2 ? XL.groupFill : null });
       });
-      const col = (h) => row.getCell(REC_COLS.findIndex(c => c.h === h) + 1);
-      const sc = col("الحالة");
-      sc.fill = fill(statusFill(r.status));
-      sc.font = { name: XL_FONT, bold: true, size: 10.5 };
-      if (u.items.length > 1) col("ترتيبها على الحبة").font = { name: XL_FONT, bold: true, color: { argb: XL.deep } };
-      if (machinesOf(r) > 1) { col("عدد الماكنات").fill = fill(XL.wipFill); col("عدد الماكنات").font = { name: XL_FONT, bold: true }; }
-      if (!isClosed && age >= LATE_DAYS) col("العمر / مدة الإغلاق (يوم)").font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
-
-      const info = photos.get(r.id);
-      if (info) {
-        placePhoto(ws, info, photoCol, rowIdx - 1, PHOTO_MAX[0], PHOTO_MAX[1]);
-        row.height = PHOTO_ROW_PT;
-      } else {
-        photoCellFallback(row.getCell(photoCol + 1), r);
-        const len = Math.max((r.description || "").length, (r.action || "").length * 1.25);
-        row.height = Math.min(100, Math.max(30, Math.ceil(len / 48) * 15 + 8));
-      }
-      rowIdx++;
+      const sc = row.getCell(colIndex(cols, "الحالة"));
+      sc.fill = fill(statusFill(rec.status)); sc.font = { name: XL_FONT, bold: true, size: 10.5 };
+      const ai = colIndex(cols, "العمر / مدة الإغلاق (يوم)");
+      if (ai && rec.status !== "مغلقة" && S.ageOf(rec) >= LATE_DAYS) row.getCell(ai).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+      const mi = colIndex(cols, "عدد الماكنات");
+      if (mi && machinesOf(rec) > 1) { row.getCell(mi).fill = fill(XL.wipFill); row.getCell(mi).font = { name: XL_FONT, bold: true }; }
+      row.height = textRowHeight(textCols.map(i => vals[i]), textCols.map(i => widths[i]));
+      r++;
     });
   });
+  if (r === startRow) {
+    ws.mergeCells(r, 1, r, cols.length);
+    const c = ws.getCell(r, 1);
+    c.value = opts.empty || "لا يوجد";
+    styleBodyCell(c, { h: "center", fill: XL.okFill });
+    ws.getRow(r).height = 26;
+  }
 }
 
-function buildUnitsSheet(wb, S){
-  const cols = [
-    { h: "#", w: 5 }, { h: "رقم أمر الشغل", w: 14 }, { h: "S/N", w: 14 }, { h: "القسم", w: 12 },
-    { h: "عدد الملاحظات", w: 11, fmt: "0" }, { h: "عدد الماكنات", w: 9, fmt: "0" }, { h: "مفتوحة", w: 9, fmt: "0" }, { h: "مغلقة", w: 9, fmt: "0" },
-    { h: "ساعات التوقف", w: 10, fmt: "0.0" }, { h: "أنواع المشاكل", w: 24 }, { h: "أول ملاحظة", w: 12, fmt: "dd/mm/yyyy" },
-    { h: "آخر ملاحظة", w: 12, fmt: "dd/mm/yyyy" }, { h: "أرقام السجلات", w: 30 }, { h: "ملخص الملاحظات", w: 60 },
+const STAGE_COLS = [
+  { h: "#", w: 5 }, { h: "رقم السجل", w: 19 }, { h: "التاريخ", w: 11, fmt: "dd/mm/yyyy" }, { h: "مرحلة الاكتشاف", w: 11 },
+  { h: "أمر الشغل", w: 11 }, { h: "S/N", w: 12 }, { h: "عدد الماكنات", w: 8, fmt: "0" }, { h: "تصنيف العيب", w: 22, text: true },
+  { h: "وصف الملاحظة", w: 44, text: true }, { h: "الحالة", w: 11 }, { h: "العمر / مدة الإغلاق (يوم)", w: 10, fmt: "0" },
+  { h: "ساعات التوقف", w: 8, fmt: "0.0" }, { h: "المسؤول", w: 13 }, { h: "الإجراء المتخذ", w: 28, text: true },
+];
+function stageRowVals(S, extra){
+  return (r, n) => [
+    n, r.recordId || "", xlDay(toDateSafe(r.createdAt)), stageOf(r), r.jobOrder || "", r.serialNumber || "", machinesOf(r),
+    categoryOf(r), r.description || "", r.status || "مفتوحة", S.daysOf(r), parseFloat(r.downtime) || 0,
+    r.owner || "— غير محدد —", r.action || "", ...(extra ? extra(r) : [])
   ];
-  const ws = wb.addWorksheet("حسب الحبة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }] });
-  setupTableSheet(ws, cols);
-  S.unitList.forEach((u, i) => {
-    const types = sortedEntries(countByFn(u.items, r => r.issueType)).map(([k, v]) => `${k} (${v})`).join("، ");
-    const summary = u.items.map((r, k) => `${k + 1}) ${r.description || ""}`).join("\n");
+}
+
+function buildBeforeSheet(wb, S, list){
+  const ws = wb.addWorksheet("ملاحظات ما قبل Testing", { views: [{ rightToLeft: true, state: "frozen", ySplit: 2, xSplit: 2 }], properties: { tabColor: { argb: XL.deep } } });
+  const start = setupTableSheet(ws, STAGE_COLS, "ملاحظات ما قبل مرحلة Testing — مرتبة حسب مسار اللوحة (Cutting ← Layout ← Power ← Control)");
+  const items = list.filter(r => phaseOf(r) === PH_BEFORE);
+  const groups = S.stages.filter(x => x.phase === PH_BEFORE).map(x => {
+    const g = items.filter(r => stageOf(r) === x.stage).sort(byDate);
+    return { name: x.stage, items: g, machines: x.machines, fill: XL.phBefore };
+  });
+  writeGroupedRecords(ws, S, STAGE_COLS, groups, start, stageRowVals(S), { empty: "ما في ملاحظات قبل Testing بهالفترة" });
+}
+
+function buildTestingSheet(wb, S){
+  const cols = [...STAGE_COLS, { h: "المنشأ المقدّر", w: 30, text: true }];
+  const ws = wb.addWorksheet("ملاحظات Testing والمنشأ", { views: [{ rightToLeft: true, state: "frozen", ySplit: 2, xSplit: 2 }], properties: { tabColor: { argb: XL.amber } } });
+  const start = setupTableSheet(ws, cols, "ملاحظات مرحلة Testing وما بعدها — مجمّعة حسب المنشأ المقدّر للخطأ");
+  const groups = S.origins.map(o => ({
+    name: o.origin, items: S.testList.filter(r => originOf(r) === o.origin).sort(byDate), machines: o.machines, fill: XL.phTest
+  }));
+  const after = S.stages.filter(x => x.phase === PH_AFTER);
+  after.forEach(x => groups.push({ name: `${x.stage} (بعد Testing)`, items: S.allList.filter(r => stageOf(r) === x.stage).sort(byDate), machines: x.machines, fill: XL.phAfter }));
+  writeGroupedRecords(ws, S, cols, groups, start, stageRowVals(S, r => [originOf(r)]), { empty: "ما في ملاحظات بمرحلة Testing بهالفترة" });
+}
+
+const REC_COLS = [
+  { h: "#",                       w: 5 },
+  { h: "رقم السجل",               w: 19 },
+  { h: "التاريخ",                 w: 11, fmt: "dd/mm/yyyy" },
+  { h: "الوقت",                   w: 7 },
+  { h: "مرحلة الاكتشاف",          w: 11 },
+  { h: "المرحلة",                 w: 11 },
+  { h: "رقم أمر الشغل",           w: 12 },
+  { h: "S/N",                     w: 12 },
+  { h: "عدد الماكنات",            w: 8, fmt: "0" },
+  { h: "ترتيبها على الحبة",       w: 9 },
+  { h: "نوع المشكلة",             w: 9 },
+  { h: "تصنيف العيب",             w: 20, text: true },
+  { h: "وصف الملاحظة",            w: 40, text: true },
+  { h: "الصورة",                  w: 25 },
+  { h: "الحالة",                  w: 11 },
+  { h: "العمر / مدة الإغلاق (يوم)", w: 10, fmt: "0" },
+  { h: "المسؤول",                 w: 13 },
+  { h: "الإجراء المتخذ",          w: 28, text: true },
+  { h: "ساعات التوقف",            w: 8, fmt: "0.0" },
+  { h: "المنشأ المقدّر",          w: 24, text: true },
+  { h: "المسجّل",                 w: 13 },
+  { h: "تاريخ الإغلاق",           w: 11, fmt: "dd/mm/yyyy" },
+];
+
+function buildRecordsSheet(wb, S, list, photos){
+  const ws = wb.addWorksheet("كل الملاحظات (مع الصور)", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1, xSplit: 2 }] });
+  setupTableSheet(ws, REC_COLS);
+  const photoCol = colIndex(REC_COLS, "الصورة") - 1;
+  const widths = REC_COLS.map(c => c.w);
+  const textIdx = REC_COLS.map((c, i) => c.text ? i : -1).filter(i => i >= 0);
+  const sorted = list.slice().sort(byDate);
+  sorted.forEach((r, i) => {
+    const rowIdx = i + 2;
+    const d = toDateSafe(r.createdAt), cd = toDateSafe(r.closedAt);
+    const isClosed = r.status === "مغلقة";
+    const ph = phaseOf(r);
     const vals = [
-      i + 1, u.jobOrder || "", u.serial || "", u.dept, u.items.length, u.machines, u.open, u.items.length - u.open,
-      round1(u.downtime), types, xlDate(u.first), xlDate(u.last), u.items.map(r => r.recordId || "").join("\n"), summary
+      i + 1, r.recordId || "", xlDay(d), hhmm(d), stageOf(r), ph, r.jobOrder || "", r.serialNumber || "",
+      machinesOf(r), S.unitIndex.get(r) || "", r.issueType || "", categoryOf(r), r.description || "", null,
+      r.status || "مفتوحة", S.daysOf(r), r.owner || "", r.action || "", parseFloat(r.downtime) || 0,
+      originOf(r), r.reporterName || "", isClosed ? xlDay(cd) : null
     ];
-    const row = ws.getRow(i + 2);
+    const row = ws.getRow(rowIdx);
     vals.forEach((v, j) => {
       const c = row.getCell(j + 1);
       c.value = v;
-      styleBodyCell(c, { h: j >= 12 ? "right" : "center", fmt: cols[j].fmt, fill: u.items.length > 1 ? XL.wipFill : null });
+      styleBodyCell(c, { h: REC_COLS[j].text ? "right" : "center", fmt: REC_COLS[j].fmt, fill: i % 2 ? XL.groupFill : null });
     });
-    if (u.open) row.getCell(7).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
-    row.height = Math.min(160, Math.max(24, u.items.length * 16 + 8));
+    const col = (h) => row.getCell(colIndex(REC_COLS, h));
+    col("المرحلة").fill = fill(PHASE_FILL[ph]);
+    const sc = col("الحالة");
+    sc.fill = fill(statusFill(r.status)); sc.font = { name: XL_FONT, bold: true, size: 10.5 };
+    if (String(S.unitIndex.get(r) || "").indexOf(" من 1") < 0) col("ترتيبها على الحبة").font = { name: XL_FONT, bold: true, color: { argb: XL.deep } };
+    if (machinesOf(r) > 1) { col("عدد الماكنات").fill = fill(XL.wipFill); col("عدد الماكنات").font = { name: XL_FONT, bold: true }; }
+    if (!isClosed && S.ageOf(r) >= LATE_DAYS) col("العمر / مدة الإغلاق (يوم)").font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+    const info = photos.get(r.id);
+    if (info) {
+      placePhoto(ws, info, photoCol, rowIdx - 1, PHOTO_MAX[0], PHOTO_MAX[1]);
+      row.height = PHOTO_ROW_PT;
+    } else {
+      photoCellFallback(row.getCell(photoCol + 1), r);
+      row.height = textRowHeight(textIdx.map(k => vals[k]), textIdx.map(k => widths[k]));
+    }
   });
 }
 
 function buildOpenSheet(wb, S, photos){
   const cols = [
-    { h: "#", w: 5 }, { h: "رقم السجل", w: 20 }, { h: "تاريخ التسجيل", w: 12, fmt: "dd/mm/yyyy" },
-    { h: "العمر (يوم)", w: 9, fmt: "0" }, { h: "القسم", w: 12 }, { h: "رقم أمر الشغل", w: 13 }, { h: "S/N", w: 13 },
-    { h: "عدد الماكنات", w: 9, fmt: "0" }, { h: "نوع المشكلة", w: 12 }, { h: "وصف الملاحظة", w: 42 }, { h: "الصورة", w: 25 }, { h: "الحالة", w: 12 },
-    { h: "المسؤول", w: 16 }, { h: "الإجراء المتخذ / المطلوب", w: 34 },
+    { h: "#", w: 5 }, { h: "رقم السجل", w: 19 }, { h: "تاريخ التسجيل", w: 11, fmt: "dd/mm/yyyy" },
+    { h: "العمر (يوم)", w: 8, fmt: "0" }, { h: "مرحلة الاكتشاف", w: 11 }, { h: "رقم أمر الشغل", w: 12 }, { h: "S/N", w: 12 },
+    { h: "عدد الماكنات", w: 8, fmt: "0" }, { h: "تصنيف العيب", w: 20, text: true }, { h: "وصف الملاحظة", w: 40, text: true },
+    { h: "الصورة", w: 25 }, { h: "الحالة", w: 11 }, { h: "المسؤول", w: 14 }, { h: "الإجراء المتخذ / المطلوب", w: 30, text: true },
   ];
-  const ws = wb.addWorksheet("المفتوحة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }] });
-  setupTableSheet(ws, cols);
+  const ws = wb.addWorksheet("المفتوحة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 2 }], properties: { tabColor: { argb: XL.danger } } });
+  const start = setupTableSheet(ws, cols, `الملاحظات المفتوحة / قيد المعالجة — الأقدم أولاً (المتأخر: ${LATE_DAYS} أيام أو أكثر)`);
   if (!S.openAged.length) {
-    ws.mergeCells(2, 1, 2, cols.length);
-    const c = ws.getCell(2, 1);
+    ws.mergeCells(start, 1, start, cols.length);
+    const c = ws.getCell(start, 1);
     c.value = "ما في ملاحظات مفتوحة بهالفترة";
     styleBodyCell(c, { h: "center", fill: XL.okFill });
-    ws.getRow(2).height = 28;
+    ws.getRow(start).height = 28;
     return;
   }
   S.openAged.forEach(({ r, age }, i) => {
-    const d = toDateSafe(r.createdAt);
+    const rowIdx = start + i;
     const late = age >= LATE_DAYS;
     const vals = [
-      i + 1, r.recordId || "", xlDate(d), age, deptLabel(r.dept), r.jobOrder || "", r.serialNumber || "",
-      machinesOf(r), r.issueType || "", r.description || "", null, r.status || "مفتوحة", r.owner || "— غير محدد —", r.action || ""
+      i + 1, r.recordId || "", xlDay(toDateSafe(r.createdAt)), age, stageOf(r), r.jobOrder || "", r.serialNumber || "",
+      machinesOf(r), categoryOf(r), r.description || "", null, r.status || "مفتوحة", r.owner || "— غير محدد —", r.action || ""
     ];
-    const row = ws.getRow(i + 2);
+    const row = ws.getRow(rowIdx);
     vals.forEach((v, j) => {
       const c = row.getCell(j + 1);
       c.value = v;
-      styleBodyCell(c, { h: [9, 13].includes(j) ? "right" : "center", fmt: cols[j].fmt });
+      styleBodyCell(c, { h: cols[j].text ? "right" : "center", fmt: cols[j].fmt });
     });
     row.getCell(12).fill = fill(statusFill(r.status));
     if (late) { row.getCell(4).fill = fill(XL.openFill); row.getCell(4).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } }; }
     if (!r.owner) row.getCell(13).font = { name: XL_FONT, italic: true, color: { argb: XL.danger } };
     const info = photos.get(r.id);
-    if (info) { placePhoto(ws, info, 10, i + 1, PHOTO_MAX[0], PHOTO_MAX[1]); row.height = PHOTO_ROW_PT; }
-    else { photoCellFallback(row.getCell(11), r); row.height = 34; }
+    if (info) { placePhoto(ws, info, 10, rowIdx - 1, PHOTO_MAX[0], PHOTO_MAX[1]); row.height = PHOTO_ROW_PT; }
+    else { photoCellFallback(row.getCell(11), r); row.height = textRowHeight([vals[8], vals[9], vals[13]], [20, 40, 30]); }
+  });
+}
+
+function buildUnitsSheet(wb, S){
+  const cols = [
+    { h: "#", w: 5 }, { h: "رقم أمر الشغل", w: 13 }, { h: "S/N", w: 13 }, { h: "المراحل", w: 20, text: true },
+    { h: "عدد الملاحظات", w: 9, fmt: "0" }, { h: "عدد الماكنات", w: 8, fmt: "0" }, { h: "مفتوحة", w: 8, fmt: "0" }, { h: "مغلقة", w: 8, fmt: "0" },
+    { h: "ساعات التوقف", w: 8, fmt: "0.0" }, { h: "تصنيفات العيوب", w: 30, text: true }, { h: "أول ملاحظة", w: 11, fmt: "dd/mm/yyyy" },
+    { h: "آخر ملاحظة", w: 11, fmt: "dd/mm/yyyy" }, { h: "أرقام السجلات", w: 19, text: true }, { h: "ملخص الملاحظات", w: 55, text: true },
+  ];
+  const ws = wb.addWorksheet("حسب الحبة", { views: [{ rightToLeft: true, state: "frozen", ySplit: 2 }] });
+  const start = setupTableSheet(ws, cols, "التجميع حسب الحبة (أمر الشغل + S/N) — الحبات المتكررة أولاً");
+  S.unitList.forEach((u, i) => {
+    const cats = sortedEntries(countByFn(u.items, categoryOf)).map(([k, v]) => `${k} (${v})`).join("\n");
+    const summary = u.items.map((r, k) => `${k + 1}) [${stageOf(r)}] ${r.description || ""}`).join("\n");
+    const vals = [
+      i + 1, u.jobOrder || "", u.serial || "", u.stages, u.items.length, u.machines, u.open, u.items.length - u.open,
+      round1(u.downtime), cats, xlDay(u.first), xlDay(u.last), u.items.map(r => r.recordId || "").join("\n"), summary
+    ];
+    const row = ws.getRow(start + i);
+    vals.forEach((v, j) => {
+      const c = row.getCell(j + 1);
+      c.value = v;
+      styleBodyCell(c, { h: cols[j].text ? "right" : "center", fmt: cols[j].fmt, fill: u.items.length > 1 ? XL.wipFill : null });
+    });
+    if (u.open) row.getCell(7).font = { name: XL_FONT, bold: true, color: { argb: XL.danger } };
+    row.height = Math.min(170, Math.max(22, u.items.length * 15 + 8, ...u.items.map(r => Math.ceil(String(r.description || "").length / 60) * 15 * u.items.length)));
+  });
+}
+
+/* بناء الملف كامل */
+function buildReportWorkbook(wb, list, meta, photos, charts){
+  const S = computeStats(list);
+  S.allList = list;
+  if (!meta.team) meta.team = sortedEntries(S.byReporter).map(([k]) => k).filter(k => k && k !== "غير محدد");
+  buildReportSheet(wb, S, meta, charts);
+  buildBeforeSheet(wb, S, list);
+  buildTestingSheet(wb, S);
+  buildRecordsSheet(wb, S, list, photos);
+  buildOpenSheet(wb, S, photos);
+  buildUnitsSheet(wb, S);
+  return S;
+}
+/* XLREPORT-END */
+
+/* ---- شاشة التحليل ---- */
+if (typeof Chart !== "undefined") {
+  Chart.defaults.font.family = "'Tajawal', Tahoma, Arial, sans-serif";
+  Chart.defaults.color = "#5B6672";
+  // إيقاف الحركة الانتقالية: نتجنب هيك أي وميض بصري عند تغيير الفترة بسرعة
+  Chart.defaults.animation = false;
+}
+const chartInstances = {};
+function renderOrUpdateChart(canvasId, config){
+  if (typeof Chart === "undefined") return;
+  const existing = chartInstances[canvasId];
+  if (existing) { existing.destroy(); delete chartInstances[canvasId]; }
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  chartInstances[canvasId] = new Chart(ctx, config);
+}
+
+(function setDefaultAnalysisRange(){
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  analysisFrom.value = localDateStr(firstOfMonth);
+  analysisTo.value = localDateStr(today);
+})();
+function pad2(n){ return String(n).padStart(2, "0"); }
+// تاريخ محلي (مش UTC) — عشان أول الشهر ما يطلع آخر يوم بالشهر الماضي بعد منتصف الليل
+function localDateStr(d){ return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function fmtTime(d){ return d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : ""; }
+
+analysisFrom.addEventListener("change", renderAnalysisSummary);
+analysisTo.addEventListener("change", renderAnalysisSummary);
+
+function getRecordsInRange(){
+  if (!analysisFrom.value || !analysisTo.value) return [];
+  const from = new Date(analysisFrom.value + "T00:00:00");
+  const to   = new Date(analysisTo.value + "T23:59:59");
+  return allRecords.filter(r => {
+    if (!r.createdAt || !r.createdAt.toDate) return false;
+    const d = r.createdAt.toDate();
+    return d >= from && d <= to;
+  });
+}
+
+/* جدول صغير للشاشة */
+function miniTable(headers, rows, opts = {}){
+  if (!rows.length) return `<div class="hint">${opts.empty || "لا يوجد"}</div>`;
+  const th = headers.map(h => `<th>${escapeHtml(h)}</th>`).join("");
+  const tr = rows.map((cells, i) => {
+    const cls = opts.rowClass ? opts.rowClass(i) : "";
+    return `<tr class="${cls}">${cells.map(c => `<td>${c}</td>`).join("")}</tr>`;
+  }).join("");
+  const tot = opts.totals ? `<tr class="tot">${opts.totals.map(c => `<td>${c}</td>`).join("")}</tr>` : "";
+  return `<div class="mini-wrap"><table class="mini-table"><thead><tr>${th}</tr></thead><tbody>${tr}${tot}</tbody></table></div>`;
+}
+const PH_CLASS = { [PH_BEFORE]: "ph-before", [PH_TEST]: "ph-test", [PH_AFTER]: "ph-after" };
+
+function renderAnalysisSummary(){
+  const list = getRecordsInRange();
+  if (list.length === 0) {
+    analysisEmpty.style.display = "block";
+    analysisContent.style.display = "none";
+    return;
+  }
+  analysisEmpty.style.display = "none";
+  analysisContent.style.display = "block";
+
+  const chartsOk = typeof Chart !== "undefined";
+  document.getElementById("chartsUnavailableNotice").style.display = chartsOk ? "none" : "block";
+  document.querySelectorAll("#analysisContent .chart-wrap").forEach(el => { el.style.display = chartsOk ? "block" : "none"; });
+
+  const S = computeStats(list);
+  const e = escapeHtml;
+
+  document.getElementById("statGrid").innerHTML = `
+    <div class="stat-box"><div class="num">${S.total}</div><div class="lbl">إجمالي الملاحظات</div></div>
+    <div class="stat-box"><div class="num">${S.totalMachines}</div><div class="lbl">الماكنات المتأثرة</div></div>
+    <div class="stat-box"><div class="num">${fmtPct(S.closureRate)}</div><div class="lbl">نسبة الإغلاق</div></div>
+    <div class="stat-box"><div class="num" style="color:${S.openList.length ? "var(--danger)" : "var(--navy)"}">${S.openList.length}</div><div class="lbl">لسا مفتوحة</div></div>
+    <div class="stat-box"><div class="num">${round1(S.totalDowntime)}</div><div class="lbl">ساعات التوقف</div></div>
+    <div class="stat-box"><div class="num">${S.avgCloseDays !== null ? S.avgCloseDays.toFixed(1) : "—"}</div><div class="lbl">متوسط أيام الإغلاق</div></div>
+    <div class="stat-box"><div class="num" style="color:${S.lateOpen ? "var(--danger)" : "var(--navy)"}">${S.lateOpen}</div><div class="lbl">مفتوحة أكثر من ${LATE_DAYS} أيام</div></div>
+    <div class="stat-box"><div class="num">${S.repeatUnits.length}</div><div class="lbl">حبات متكررة</div></div>`;
+
+  document.getElementById("statGridBefore").innerHTML = `
+    <div class="stat-box amber"><div class="num">${S.before.n}</div><div class="lbl">ملاحظات قبل Testing</div></div>
+    <div class="stat-box amber"><div class="num">${fmtPct(S.before.p)}</div><div class="lbl">نسبة ما قبل Testing</div></div>
+    <div class="stat-box amber"><div class="num">${S.before.machines}</div><div class="lbl">ماكنات متأثرة قبل Testing</div></div>
+    <div class="stat-box amber"><div class="num" style="color:${S.leak ? "var(--danger)" : "var(--navy)"}">${S.leak}</div><div class="lbl">أخطاء تجميع وصلت لـ Testing</div></div>`;
+
+  const { findings, recs } = buildFindings(S);
+  document.getElementById("findingsList").innerHTML =
+    findings.map(t => `<div class="breakdown-row"><span>• ${e(t)}</span></div>`).join("") +
+    (recs.length ? `<div class="recs-box"><b>التوصيات:</b><ol>${recs.map(t => `<li>${e(t)}</li>`).join("")}</ol></div>` : "");
+
+  document.getElementById("tblStage").innerHTML = miniTable(
+    ["المرحلة", "التصنيف", "العدد", "النسبة", "ماكنات", "مفتوحة", "توقف (س)"],
+    S.stages.map(x => [`<b>${e(x.stage)}</b>`, e(x.phase), x.n, fmtPct(x.p), x.machines, x.open || "", round1(x.downtime) || ""]),
+    { rowClass: (i) => PH_CLASS[S.stages[i].phase], totals: ["الإجمالي", "", S.total, "100%", S.totalMachines, S.openList.length, round1(S.totalDowntime)] });
+
+  document.getElementById("tblPhase").innerHTML = miniTable(
+    ["المرحلة", "العدد", "النسبة", "ماكنات", "مفتوحة", "توقف (س)", "متوسط الأيام"],
+    S.phases.map(x => [`<b>${e(x.phase)}</b>`, x.n, fmtPct(x.p), x.machines, x.open || "", round1(x.downtime) || "", x.avgDays === null ? "—" : round1(x.avgDays)]),
+    { rowClass: (i) => PH_CLASS[S.phases[i].phase] });
+
+  document.getElementById("tblCats").innerHTML = miniTable(
+    ["تصنيف العيب", "قبل", "Testing", "بعد", "الإجمالي", "مفتوحة"],
+    S.catList.map(x => [`<b>${e(x.cat)}</b>`, x.by[PH_BEFORE] || "", x.by[PH_TEST] || "", x.by[PH_AFTER] || "", x.n, x.open || ""]),
+    { totals: ["الإجمالي", S.before.n, S.testing.n, S.phases[2].n, S.total, S.openList.length] });
+
+  document.getElementById("tblOrigin").innerHTML = miniTable(
+    ["المنشأ المقدّر", "العدد", "النسبة", "ماكنات"],
+    S.origins.map(x => [`<b>${e(x.origin)}</b>`, x.n, fmtPct(x.p), x.machines]),
+    { empty: "ما في ملاحظات بمرحلة Testing بهالفترة" });
+
+  document.getElementById("breakdownUnits").innerHTML = S.repeatUnits.length
+    ? S.repeatUnits.slice(0, 10).map(u =>
+        `<div class="breakdown-row"><span><bdi>${e(unitLabelOf(u.jobOrder, u.serial))}</bdi> · <bdi>${e(u.stages)}</bdi>${u.open ? ` · ${u.open} مفتوحة` : ""}</span><span class="n">${u.items.length}</span></div>`).join("")
+    : `<div class="hint">كل حبة عليها ملاحظة وحدة بس بهالفترة.</div>`;
+
+  document.getElementById("breakdownAging").innerHTML = S.openAged.length
+    ? S.openAged.slice(0, 10).map(({ r, age }) =>
+        `<div class="breakdown-row aging-row"><span><bdi>${e(r.recordId || "")}</bdi> · <bdi>${e(stageOf(r))}</bdi> · <bdi>${e(unitLabelOf(r.jobOrder, r.serialNumber))}</bdi>${r.owner ? ` · ${e(r.owner)}` : ` · <span style="color:var(--danger)">بدون مسؤول</span>`}</span><span class="n ${age >= LATE_DAYS ? "late" : ""}">${age} يوم</span></div>`).join("")
+    : `<div class="hint">ما في ملاحظات مفتوحة بهالفترة 👍</div>`;
+
+  const cfgs = chartConfigs(S);
+  ["chartStage", "chartPhase", "chartCats", "chartDaily", "chartOrigin", "chartDowntime", "chartStatus"].forEach(id => {
+    const wrap = document.getElementById(id) && document.getElementById(id).closest(".chart-wrap");
+    if (!cfgs[id]) { if (wrap) wrap.style.display = "none"; if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } return; }
+    if (wrap && chartsOk) wrap.style.display = "block";
+    renderOrUpdateChart(id, cfgs[id].config);
+  });
+  // ارتفاع رسم التصنيفات حسب عدد الأسطر
+  const cw = document.getElementById("chartCats").closest(".chart-wrap");
+  cw.style.height = Math.max(190, S.catList.length * 34 + 70) + "px";
+}
+
+/* ---- تصدير Excel ---- */
+function loadImageSize(dataUrl){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload  = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => res(null);
+    img.src = dataUrl;
   });
 }
 
@@ -2431,28 +2939,28 @@ async function exportExcelReport(){
   exportExcelBtn.disabled = true;
   exportExcelBtn.textContent = "⏳ جاري تجهيز التقرير...";
   try {
-    renderAnalysisSummary(); // نتأكد إن الرسوم محدّثة قبل ما ناخد صورتها
-    const S = computeStats(list);
     const now = new Date();
+    const fmtD = (s) => s ? s.split("-").reverse().join("/") : "";
     const meta = {
-      from: analysisFrom.value, to: analysisTo.value,
+      from: fmtD(analysisFrom.value), to: fmtD(analysisTo.value),
       generated: `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${fmtTime(now)}`,
       by: chatIdentitySel.value || ""
     };
     const wb = new ExcelJS.Workbook();
     wb.creator = meta.by || XL_TEAM;
     wb.created = now;
-    const photos = await registerPhotos(wb, list);
-    buildSummarySheet(wb, S, meta, captureCharts());
-    buildRecordsSheet(wb, S, photos);
-    buildUnitsSheet(wb, S);
-    buildOpenSheet(wb, S, photos);
+    const photos = await registerPhotos(wb, list, loadImageSize);
+    const S0 = computeStats(list);
+    const charts = renderReportCharts(S0, typeof Chart !== "undefined" ? Chart : null, (w, h) => {
+      const c = document.createElement("canvas"); c.width = w; c.height = h; return c;
+    });
+    buildReportWorkbook(wb, list, meta, photos, charts);
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `تقرير ملاحظات Electrical Panel (${meta.from} الى ${meta.to}).xlsx`;
+    a.download = `تقرير ملاحظات Electrical Panel (${analysisFrom.value} الى ${analysisTo.value}).xlsx`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
